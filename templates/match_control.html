@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Điều khiển trận đấu</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: white;
+      margin: 0;
+      padding: 1rem;
+    }
+
+    .overall-layout {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    select, input[type="text"], input[type="number"] {
+      width: 90%;
+    }
+
+    input[type="checkbox"] {
+      transform: scale(1.5);
+      margin: 0.5rem;
+    }
+
+    .match-controls {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+
+    .match-controls button {
+      margin: 0 0.5rem;
+      padding: 0.4rem 1rem;
+      font-weight: bold;
+    }
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(10, 100px);
+      grid-template-rows: repeat(15, 35px);
+      gap: 4px;
+      justify-content: center;
+      margin: 2rem 0 0;
+      flex-grow: 1;
+    }
+    .field-grid-alliance {
+      display: grid;
+      grid-template-columns: repeat(3, 140px);
+      grid-template-rows: repeat(9, 50px);
+      justify-content: center;
+      margin: 2rem 0 0;
+      box-sizing: border-box;
+      font-weight: bold;
+    }
+    .cell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      font-size: 13px;
+      border: 1px solid #ddd;
+      text-align: center;
+    }
+    .cell-al {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      border: 1px solid #ddd;
+      text-align: center;
+    }
+
+    /* Làm input ẩn viền và trong suốt nền */
+    .cell input[type="number"] {
+    border: none;
+    outline: none;
+    background-color: transparent;
+    text-align: center;
+    font-size: 13px;
+    width: 100%;
+    }
+
+    .cell select {
+    width: 90%;
+    height: 24px;
+    border-radius: 999px;
+    border: 1px solid #999;
+    background-color: white;
+    text-align: center;
+    font-size: 13px;
+    padding: 2px 6px;
+    }
+    .blue-2 { background-color: #60adff; }
+    .blue { background-color: #9fc5e8; }
+    .green { background-color: #b6d7a8; }
+    .red { background-color: #ff6060; }
+    .title { font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="match-controls">
+    <h3>Bảng điều khiển trận đấu
+      <select id="matchNumber">
+        {% if all_matches %}
+          {% set default_selected_match_number = match.matchNumber if match.matchNumber else all_matches[0].matchNumber %}
+          {% for m in all_matches %}
+            <option value="{{ m.matchNumber }}" {% if m.matchNumber == default_selected_match_number %}selected{% endif %}>
+              Trận {{ m.matchNumber }}
+            </option>
+          {% endfor %}
+        {% else %}
+          <option value="">-- Không có trận đấu --</option>
+        {% endif %}
+      </select>
+    </h3>
+    <button id="toggleStopBtn">Dừng trận</button>
+    <button id="startBtn">Bắt đầu</button>
+    <span id="countdown">02:30</span>
+    <button id="showScore" onclick="saveTempScore()">Hiện điểm</button>
+    <button id="hideScore" onclick="socket.emit('hide_score_request', {field_id: FIELD_ID})">Ẩn điểm</button>
+  </div>
+
+  <div class="overall-layout">
+    <div class="field-grid-alliance">
+        <!-- Tên -->
+        <div class="cell-al blue-2" style="grid-column: 1 / 4; grid-row: 1; border-top-right-radius: 20px; border-top-left-radius: 20px;">LIÊN MINH XANH</div>
+        <div class="cell-al blue-2" style="grid-column: 1; grid-row: 2"></div>
+        <div class="cell-al blue-2" style="grid-column: 2; grid-row: 2">Đội 1</div>
+        <div class="cell-al blue-2" style="grid-column: 3; grid-row: 2">Đội 2</div>
+        <div class="cell-al blue-2" style="grid-column: 1; grid-row: 3 / 5">Tên đội</div>
+        <div class="cell-al blue-2" style="grid-column: 2; grid-row: 3 / 5" id="blueTeam1">{{ match.blueTeam1 }}</div>
+        <div class="cell-al blue-2" style="grid-column: 3; grid-row: 3 / 5" id="blueTeam2">{{ match.blueTeam2 }}</div>
+        <!-- Row 2 -->
+        <div class="cell-al blue-2" style="grid-column: 1; grid-row: 5">Có mặt trên sân</div>
+        <div class="cell-al blue-2" style="grid-column: 2; grid-row: 5"><input type="checkbox" checked id="blue1Show"></div>
+        <div class="cell-al blue-2" style="grid-column: 3; grid-row: 5"><input type="checkbox" checked id="blue2Show"></div>
+        <!-- Row 3 -->
+        <div class="cell-al blue-2" style="grid-column: 1; grid-row: 6">Treo</div>
+        <div class="cell-al blue-2" style="grid-column: 2; grid-row: 6"><input type="checkbox" id="blue1Hang"></div>
+        <div class="cell-al blue-2" style="grid-column: 3; grid-row: 6"><input type="checkbox" id="blue2Hang"></div>
+        <!-- Row 4 -->
+        <div class="cell-al blue-2" style="grid-column: 1; grid-row: 7">Lỗi</div>
+        <div class="cell-al blue-2" style="grid-column: 2 / 4; grid-row: 7"><input type="number" id="blueFouls" min="0" value="0"></div>
+        <!-- Row 5 -->
+        <div class="cell-al blue-2" style="grid-column: 1; grid-row: 8">Thẻ Vàng</div>
+        <div class="cell-al blue-2" style="grid-column: 2; grid-row: 8"><input type="number" id="blue1YellowCard" min="0" value="0"></div>
+        <div class="cell-al blue-2" style="grid-column: 3; grid-row: 8"><input type="number" id="blue2YellowCard" min="0" value="0"></div>
+        <!-- Row 6 -->
+        <div class="cell-al blue-2" style="grid-column: 1; grid-row: 9; border-bottom-left-radius: 20px;">Thẻ Đỏ</div>
+        <div class="cell-al blue-2" style="grid-column: 2; grid-row: 9"><input type="checkbox" id="blue1RedCard"></div>
+        <div class="cell-al blue-2" style="grid-column: 3; grid-row: 9; border-bottom-right-radius: 20px;"><input type="checkbox" id="blue2RedCard"></div>
+      </div>
+
+    <div>
+      <div class="field-grid">
+        <div class="cell red title" style="grid-column: 2 / span 2; grid-row: 1">NHÀ KÍNH</div>
+        <div class="cell blue title" style="grid-column: 4; grid-row: 1">NHÀ KÍNH</div>
+        <div class="cell score-display" id="blueScore"
+             style="grid-column: 5; grid-row: 1 / span 2; color: blue; font-size: 2.2rem; font-weight: bold; border: none;">
+          0
+        </div>
+        <div class="cell score-display" id="redScore"
+             style="grid-column: 6; grid-row: 1 / span 2; color: red; font-size: 2.1rem; font-weight: bold; border: none;">
+          0
+        </div>
+        <div class="cell red title" style="grid-column: 7; grid-row: 1">NHÀ KÍNH</div>
+        <div class="cell blue title" style="grid-column: 8 / span 2; grid-row: 1">NHÀ KÍNH</div>
+
+        <div class="cell blue title" style="grid-column: 1; grid-row: 2">Đất</div>
+        <div class="cell green title" style="grid-column: 1; grid-row: 3">Hạt giống</div>
+        <div class="cell blue" style="grid-column: 2; grid-row: 2">
+          <select id="GHRed1_Dirt">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell blue" style="grid-column: 3; grid-row: 2">
+          <select id="GHRed2_Dirt">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell blue" style="grid-column: 4; grid-row: 2">
+          <select id="GHBlue1_Dirt">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell blue" style="grid-column: 7; grid-row: 2">
+          <select id="GHRed3_Dirt">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell blue" style="grid-column: 8; grid-row: 2">
+          <select id="GHBlue2_Dirt">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell blue" style="grid-column: 9; grid-row: 2">
+          <select id="GHBlue3_Dirt">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell green" style="grid-column: 2; grid-row: 3">
+          <select id="GHRed1_Seed">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell green" style="grid-column: 3; grid-row: 3">
+          <select id="GHRed2_Seed">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell green" style="grid-column: 4; grid-row: 3">
+          <select id="GHBlue1_Seed">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell green" style="grid-column: 7; grid-row: 3">
+          <select id="GHRed3_Seed">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell green" style="grid-column: 8; grid-row: 3">
+          <select id="GHBlue2_Seed">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell green" style="grid-column: 9; grid-row: 3">
+          <select id="GHBlue3_Seed">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell blue title" style="grid-column: 10; grid-row: 2">Đất</div>
+        <div class="cell green title" style="grid-column: 10; grid-row: 3">Hạt giống</div>
+
+        <div class="cell blue title" style="grid-column: 5; grid-row: 4">VƯỜN</div>
+        <div class="cell red title" style="grid-column: 6; grid-row: 4">VƯỜN</div>
+        <div class="cell blue" style="grid-column: 5; grid-row: 5">
+          <select id="blueGardenDirt">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+          </select>
+        </div>
+        <div class="cell blue" style="grid-column: 6; grid-row: 5">
+          <select id="redGardenDirt">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+          </select>
+        </div>
+        <div class="cell green" style="grid-column: 5; grid-row: 6">
+          <select id="blueGardenSeed">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+          </select>
+        </div>
+        <div class="cell green" style="grid-column: 6; grid-row: 6">
+          <select id="redGardenSeed">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+          </select>
+        </div>
+        <div class="cell blue title" style="grid-column: 4; grid-row: 5">Đất</div>
+        <div class="cell green title" style="grid-column: 4; grid-row: 6">Hạt giống</div>
+        <div class="cell blue title" style="grid-column: 7; grid-row: 5">Đất</div>
+        <div class="cell green title" style="grid-column: 7; grid-row: 6">Hạt giống</div>
+
+        <div class="cell title" style="grid-column: 5 / span 2; grid-row: 8">ĐÒN GÁNH</div>
+        <div class="cell blue title" style="grid-column: 4; grid-row: 9">Nông sản</div>
+        <div class="cell" style="grid-column: 5; grid-row: 9">
+          <select id="blueHarvest">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+          </select>
+        </div>
+        <div class="cell" style="grid-column: 6; grid-row: 9">
+          <select id="redHarvest">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+          </select>
+        </div>
+        <div class="cell red title" style="grid-column: 7; grid-row: 9">Nông sản</div>
+        <div class="cell title" style="grid-column: 5 / span 2; grid-row: 10">MÙA BỘI THU</div>
+        <div class="cell blue title" style="grid-column: 4; grid-row: 11">Dưa hấu</div>
+        <div class="cell" style="grid-column: 5; grid-row: 11">
+          <select id="blueBumperCrop">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+        </div>
+        <div class="cell" style="grid-column: 6; grid-row: 11">
+          <select id="redBumperCrop">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+        </div>
+        <div class="cell red title" style="grid-column: 7; grid-row: 11">Dưa hấu</div>
+
+        <div class="cell blue title" style="grid-column: 2; grid-row: 13">Đất</div>
+        <div class="cell green title" style="grid-column: 2; grid-row: 14">Hạt giống</div>
+        <div class="cell blue" style="grid-column: 3; grid-row: 13">
+          <select id="GHBlue4_Dirt">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell blue" style="grid-column: 4; grid-row: 13">
+          <select id="GHBlue5_Dirt">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell blue" style="grid-column: 5; grid-row: 13">
+          <select id="GHRed4_Dirt">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell blue" style="grid-column: 6; grid-row: 13">
+          <select id="GHBlue6_Dirt">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell blue" style="grid-column: 7; grid-row: 13">
+          <select id="GHRed5_Dirt">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell blue" style="grid-column: 8; grid-row: 13">
+          <select id="GHRed6_Dirt">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell green" style="grid-column: 3; grid-row: 14">
+          <select id="GHBlue4_Seed">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell green" style="grid-column: 4; grid-row: 14">
+          <select id="GHBlue5_Seed">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell green" style="grid-column: 5; grid-row: 14">
+          <select id="GHRed4_Seed">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell green" style="grid-column: 6; grid-row: 14">
+          <select id="GHBlue6_Seed">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell green" style="grid-column: 7; grid-row: 14">
+          <select id="GHRed5_Seed">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell green" style="grid-column: 8; grid-row: 14">
+          <select id="GHRed6_Seed">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div class="cell blue title" style="grid-column: 9; grid-row: 13">Đất</div>
+        <div class="cell green title" style="grid-column: 9; grid-row: 14">Hạt giống</div>
+
+        <div class="cell blue title" style="grid-column: 3 / span 2; grid-row: 15">NHÀ KÍNH</div>
+        <div class="cell red title" style="grid-column: 5; grid-row: 15">NHÀ KÍNH</div>
+        <div class="cell blue title" style="grid-column: 6; grid-row: 15">NHÀ KÍNH</div>
+        <div class="cell red title" style="grid-column: 7 / span 2; grid-row: 15">NHÀ KÍNH</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="field-grid-alliance">
+        <!-- Tên -->
+        <div class="cell-al red" style="grid-column: 1 / 4; grid-row: 1; border-top-right-radius: 20px; border-top-left-radius: 20px;">LIÊN MINH ĐỎ</div>
+        <div class="cell-al red" style="grid-column: 1; grid-row: 2"></div>
+        <div class="cell-al red" style="grid-column: 2; grid-row: 2">Đội 1</div>
+        <div class="cell-al red" style="grid-column: 3; grid-row: 2">Đội 2</div>
+        <div class="cell-al red" style="grid-column: 1; grid-row: 3 / 5">Tên đội</div>
+        <div class="cell-al red" style="grid-column: 2; grid-row: 3 / 5" id="redTeam1">{{ match.redTeam1 }}</div>
+        <div class="cell-al red" style="grid-column: 3; grid-row: 3 / 5" id="redTeam2">{{ match.redTeam2 }}</div>
+        <!-- Row 2 -->
+        <div class="cell-al red" style="grid-column: 1; grid-row: 5">Có mặt trên sân</div>
+        <div class="cell-al red" style="grid-column: 2; grid-row: 5"><input type="checkbox" checked id="red1Show"></div>
+        <div class="cell-al red" style="grid-column: 3; grid-row: 5"><input type="checkbox" checked id="red2Show"></div>
+        <!-- Row 3 -->
+        <div class="cell-al red" style="grid-column: 1; grid-row: 6">Treo</div>
+        <div class="cell-al red" style="grid-column: 2; grid-row: 6"><input type="checkbox" id="red1Hang"></div>
+        <div class="cell-al red" style="grid-column: 3; grid-row: 6"><input type="checkbox" id="red2Hang"></div>
+        <!-- Row 4 -->
+        <div class="cell-al red" style="grid-column: 1; grid-row: 7">Lỗi</div>
+        <div class="cell-al red" style="grid-column: 2 / 4; grid-row: 7"><input type="number" id="redFouls" min="0" value="0"></div>
+        <!-- Row 5 -->
+        <div class="cell-al red" style="grid-column: 1; grid-row: 8">Thẻ Vàng</div>
+        <div class="cell-al red" style="grid-column: 2; grid-row: 8"><input type="number" id="red1YellowCard" min="0" value="0"></div>
+        <div class="cell-al red" style="grid-column: 3; grid-row: 8"><input type="number" id="red2YellowCard" min="0" value="0"></div>
+        <!-- Row 6 -->
+        <div class="cell-al red" style="grid-column: 1; grid-row: 9; border-bottom-left-radius: 20px;">Thẻ Đỏ</div>
+        <div class="cell-al red" style="grid-column: 2; grid-row: 9"><input type="checkbox" id="red1RedCard"></div>
+        <div class="cell-al red" style="grid-column: 3; grid-row: 9; border-bottom-right-radius: 20px;"><input type="checkbox" id="red2RedCard"></div>
+      </div>
+    </div>
+  </div>
+  <audio id="startSound" src="{{ url_for('static', filename='321go.mp3') }}" preload="auto"></audio>
+
+  <audio id="thirtySecondSound" src="{{ url_for('static', filename='30seconds.mp3') }}" preload="auto"></audio>
+  <audio id="endSound" src="{{ url_for('static', filename='end.mp3') }}" preload="auto"></audio>
+  <audio id="bumpperCrop" src="{{ url_for('static', filename='bumper.mp3') }}" preload="auto"></audio>
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <script>
+    const FIELD_ID = "{{ field_id }}";
+    const socket = io();
+    const matchData = {{ all_matches | tojson }};
+    console.log("matchData from Jinja:", matchData); // Debugging: Check what matchData contains
+    console.log("FIELD_ID:", FIELD_ID); // Debugging: Check FIELD_ID
+
+    let stopClicked = false;
+    const countdownElement = document.getElementById('countdown');
+    const startSound = document.getElementById('startSound');
+
+    const thirtySecondSound = document.getElementById('thirtySecondSound');
+    const endSound = document.getElementById('endSound');
+
+
+    socket.on('connect', () => {
+        console.log(`Control panel connected. SID: ${socket.id}. Joining room: ${FIELD_ID}`);
+        socket.emit('join_room', { field_id: FIELD_ID });
+    });
+
+    // Function to reset all relevant input fields to their default/0 values
+    function resetInputFields() {
+        console.log("resetInputFields called.");
+
+        // Resetting select elements to their first option (value="0")
+        const selectElements = document.querySelectorAll('select');
+        console.log(`Found ${selectElements.length} select elements.`);
+        selectElements.forEach(select => {
+            // EXCLUDE the matchNumber select from being reset to '0'
+            if (select.id === 'matchNumber') {
+                // Do not reset matchNumber here, it's handled by updateMatch
+                return;
+            }
+            select.value = '0';
+            // Trigger change event programmatically to ensure listeners are fired
+            const event = new Event('change');
+            select.dispatchEvent(event);
+        });
+
+        // Resetting number input fields to 0
+        const numberInputs = document.querySelectorAll('input[type="number"]');
+        console.log(`Found ${numberInputs.length} number inputs.`);
+        numberInputs.forEach(input => {
+            input.value = '0';
+            // Trigger input event programmatically
+            const event = new Event('input');
+            input.dispatchEvent(event);
+        });
+
+        // Resetting checkbox input fields to unchecked (false)
+        const checkboxInputs = document.querySelectorAll('input[type="checkbox"]');
+        console.log(`Found ${checkboxInputs.length} checkbox inputs.`);
+        checkboxInputs.forEach(input => {
+            input.checked = false;
+            // Trigger change event programmatically
+            const event = new Event('change');
+            input.dispatchEvent(event);
+        });
+
+        // Specific checkboxes that should be checked by default
+        const blue1Show = document.getElementById('blue1Show');
+        if (blue1Show) {
+            blue1Show.checked = true;
+            blue1Show.dispatchEvent(new Event('change'));
+        }
+        const blue2Show = document.getElementById('blue2Show');
+        if (blue2Show) {
+            blue2Show.checked = true;
+            blue2Show.dispatchEvent(new Event('change'));
+        }
+        const red1Show = document.getElementById('red1Show');
+        if (red1Show) {
+            red1Show.checked = true;
+            red1Show.dispatchEvent(new Event('change'));
+        }
+        const red2Show = document.getElementById('red2Show');
+        if (red2Show) {
+            red2Show.checked = true;
+            red2Show.dispatchEvent(new Event('change'));
+        }
+
+        // Recalculate and display scores after resetting inputs
+        showScores();
+        console.log("resetInputFields completed.");
+    }
+
+    const updateMatch = (matchNumber) => {
+      let selectedMatch = matchData.find(m => m.matchNumber === matchNumber);
+
+      // If the provided matchNumber is not found or is empty, try to use the first match in the list
+      if (!selectedMatch && matchData.length > 0) {
+        selectedMatch = matchData[0];
+        matchNumber = selectedMatch.matchNumber; // Update matchNumber to the first one
+      }
+
+      if (!selectedMatch) {
+        console.error("No match data available to update.");
+        return;
+      }
+
+      document.getElementById('blueTeam1').textContent = selectedMatch.blueTeam1;
+      document.getElementById('blueTeam2').textContent = selectedMatch.blueTeam2;
+      document.getElementById('redTeam1').textContent = selectedMatch.redTeam1;
+      document.getElementById('redTeam2').textContent = selectedMatch.redTeam2;
+
+      // Ensure the select element's value is explicitly set
+      // This is crucial to ensure document.getElementById('matchNumber').value is not empty
+      document.getElementById('matchNumber').value = matchNumber;
+
+      // Reset all input fields when a new match is selected, EXCEPT matchNumber select
+      resetInputFields();
+
+      // Gửi field_id cùng với sự kiện change_match
+      console.log(`Emitting change_match for match: ${matchNumber}, field: ${FIELD_ID}`);
+      socket.emit('change_match', { matchNumber: matchNumber, field_id: FIELD_ID });
+    };
+
+    document.getElementById('matchNumber').addEventListener('change', e => {
+      updateMatch(e.target.value);
+    });
+
+    document.getElementById('startBtn').addEventListener("click", () => {
+      // Gửi field_id cùng với sự kiện start_match
+      console.log(`Emitting start_match for field: ${FIELD_ID}`);
+      socket.emit("start_match", { field_id: FIELD_ID });
+      document.getElementById('startBtn').disabled = true;
+    });
+
+    document.getElementById('toggleStopBtn').addEventListener("click", () => {
+      if (!stopClicked) {
+        // Gửi field_id cùng với sự kiện stop_match
+        console.log(`Emitting stop_match for field: ${FIELD_ID}`);
+        socket.emit("stop_match", { field_id: FIELD_ID });
+        stopClicked = true;
+      } else {
+        // Gửi field_id cùng với sự kiện reset_match
+        console.log(`Emitting reset_match for field: ${FIELD_ID}`);
+        socket.emit("reset_match", { field_id: FIELD_ID });
+        stopClicked = false;
+      }
+    });
+    // Lắng nghe reset_done cho field_id cụ thể
+    socket.on("reset_done", (data) => {
+        if (data.field_id === FIELD_ID) {
+            console.log(`Received reset_done for field: ${FIELD_ID}`);
+            document.getElementById("startBtn").disabled = false;
+        }
+    });
+
+    // Lắng nghe countdown cho field_id cụ thể
+    socket.on('countdown', (data) => {
+        if (data.field_id === FIELD_ID) {
+            console.log(`Received countdown for field ${FIELD_ID}: ${data.value}`);
+            countdownElement.textContent = data.value;
+            startSound.play();
+        }
+    });
+    // Lắng nghe timer_update cho field_id cụ thể
+    socket.on('timer_update', (data) => {
+        if (data.field_id === FIELD_ID) {
+            console.log(`Received timer_update for field ${FIELD_ID}: ${data.time}`);
+            countdownElement.textContent = data.time;
+            const [minutes, seconds] = data.time.split(':').map(Number);
+            const totalSeconds = minutes * 60 + seconds;
+
+            if (totalSeconds === 60) {
+                thirtySecondSound.play();
+            } else if (totalSeconds === 30) {
+                thirtySecondSound.play();
+            } else if (totalSeconds === 0) {
+                endSound.play();
+            }
+        }
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      let initialMatchNumber = document.getElementById('matchNumber').value;
+      // If initialMatchNumber is empty (e.g., no default selected by Jinja or no matches),
+      // try to use the first match from matchData.
+      if (!initialMatchNumber && matchData.length > 0) {
+        initialMatchNumber = matchData[0].matchNumber;
+      }
+      updateMatch(initialMatchNumber);
+    });
+
+    function calcGreenhousePoints(dirt, seed) {
+      if (seed === 2) dirt = 0;
+      if (dirt === 2) seed = 0;
+
+      let score = 0;
+      if (dirt === 1) score += 3;
+      else if (dirt === 2) score += 6;
+
+      if (seed === 1) score += 3;
+      else if (seed === 2) score += 6;
+
+      if (dirt === 1 && seed === 1) score += 5;
+
+      return score;
+    }
+    function calculateGHScore() {
+      const get = (id) => parseInt(document.getElementById(id)?.value) || 0;
+      const GHBlue = {};
+      const GHRed = {};
+      const blueNames = ['GHBlue1', 'GHBlue2', 'GHBlue3', 'GHBlue4', 'GHBlue5', 'GHBlue6'];
+      const redNames = ['GHRed1', 'GHRed2', 'GHRed3', 'GHRed4', 'GHRed5', 'GHRed6'];
+      blueNames.forEach(name => {
+        const dirt = get(`${name}_Dirt`);
+        const seed = get(`${name}_Seed`);
+        GHBlue[name] = calcGreenhousePoints(dirt, seed);
+      });
+      GHBlue.total = blueNames.reduce((sum, name) => sum + GHBlue[name], 0);
+      redNames.forEach(name => {
+        const dirt = get(`${name}_Dirt`);
+        const seed = get(`${name}_Seed`);
+        GHRed[name] = calcGreenhousePoints(dirt, seed);
+      });
+      GHRed.total = redNames.reduce((sum, name) => sum + GHRed[name], 0);
+      return { GHBlue, GHRed };
+    }
+    function calculateGardenScore() {
+      const get = (id) => parseInt(document.getElementById(id)?.value) || 0;
+      const blueGarden = get('blueGardenDirt') + get('blueGardenSeed');
+      const redGarden = get('redGardenDirt') + get('redGardenSeed');
+      return { blueGarden, redGarden };
+    }
+    function calculateHarvestScore() {
+      const get = (id) => parseInt(document.getElementById(id)?.value) || 0;
+      const blueHarvest = get('blueHarvest');
+      const redHarvest = get('redHarvest');
+      const lowest = Math.min(blueHarvest, redHarvest);
+      const harvestPointsTable = { 0: 0, 1: 15, 2: 30, 3: 45, 4: 60, 5: 80, 6: 100 };
+      const score = harvestPointsTable[lowest] || 0;
+      return { blueHarvest, redHarvest, harvestScoreEach: score };
+    }
+    function calculateBumperCropScore() {
+      const get = (id) => parseInt(document.getElementById(id)?.value) || 0;
+      const blue = get('blueBumperCrop');
+      const red = get('redBumperCrop');
+      const total = blue + red;
+      const scoreEach = total * 5;
+      return { blueBumperCrop: blue, redBumperCrop: red, bumperCropScoreEach: scoreEach };
+    }
+    function calculateBalanceCoefficient() {
+      const red1Hang = document.getElementById('red1Hang')?.checked;
+      const red2Hang = document.getElementById('red2Hang')?.checked;
+      const blue1Hang = document.getElementById('blue1Hang')?.checked;
+      const blue2Hang = document.getElementById('blue2Hang')?.checked;
+      const total = [red1Hang, red2Hang, blue1Hang, blue2Hang].filter(Boolean).length;
+      switch (total) {
+        case 2: return 1.25;
+        case 3: return 1.5;
+        case 4: return 1.75;
+        default: return 1;
+      }
+    }
+    function calculatePenalty() {
+      const getNum = (id) => parseInt(document.getElementById(id)?.value) || 0;
+
+      const redFouls = getNum('redFouls') * 5;
+      const blueFouls = getNum('blueFouls') * 5;
+
+      const redYellowCard = getNum('red1YellowCard') + getNum('red2YellowCard');
+      const blueYellowCard = getNum('blue1YellowCard') + getNum('blue2YellowCard');
+
+      return {
+        bluePenaltyPoints: blueFouls + blueYellowCard * 20,
+        redPenaltyPoints: redFouls + redYellowCard * 20,
+        blueYellowCard,
+        redYellowCard
+      };
+    }
+    function calculateTotalScore() {
+      const { GHBlue, GHRed } = calculateGHScore();
+      const { blueGarden, redGarden } = calculateGardenScore();
+      const { bumperCropScoreEach } = calculateBumperCropScore();
+      const { harvestScoreEach } = calculateHarvestScore();
+      const balanceCoefficient = calculateBalanceCoefficient();
+      const { redPenaltyPoints, bluePenaltyPoints } = calculatePenalty();
+      const blueBase = GHBlue.total + blueGarden + bumperCropScoreEach;
+      const redBase = GHRed.total + redGarden + bumperCropScoreEach;
+      const blueAllianceScore = Math.max(0, parseFloat((blueBase * balanceCoefficient + harvestScoreEach - bluePenaltyPoints).toFixed(2)));
+      const redAllianceScore = Math.max(0, parseFloat((redBase * balanceCoefficient + harvestScoreEach - redPenaltyPoints).toFixed(2)));
+      return {
+        blueAllianceScore,
+        redAllianceScore,
+        detail: {
+          GHBlue: GHBlue.total,
+          GHRed: GHRed.total,
+          blueGarden,
+          redGarden,
+          bumperCropScoreEach,
+          harvestScoreEach,
+          balanceCoefficient,
+          redPenaltyPoints,
+          bluePenaltyPoints,
+          blueBase,
+          redBase
+        }
+      };
+    }
+    function showScores() {
+      const result = calculateTotalScore();
+      document.getElementById('redScore').textContent = result.redAllianceScore;
+      document.getElementById('blueScore').textContent = result.blueAllianceScore;
+      console.table(result.detail);
+    }
+    function attachAutoUpdateListeners() {
+      const inputs = document.querySelectorAll('input, select');
+      inputs.forEach(input => {
+        input.addEventListener('change', showScores);
+        input.addEventListener('input', showScores);
+      });
+    }
+    window.onload = function () {
+      attachAutoUpdateListeners();
+      showScores();
+    };
+    function calculateGreenhouseDirtScore() {
+      const get = (id) => parseInt(document.getElementById(id)?.value) || 0;
+      const blueDirtIDs = [
+        'GHBlue1_Dirt', 'GHBlue2_Dirt', 'GHBlue3_Dirt',
+        'GHBlue4_Dirt', 'GHBlue5_Dirt', 'GHBlue6_Dirt'
+      ];
+      const redDirtIDs = [
+        'GHRed1_Dirt', 'GHRed2_Dirt', 'GHRed3_Dirt',
+        'GHRed4_Dirt', 'GHRed5_Dirt', 'GHRed6_Dirt'
+      ];
+      const sum = (ids) => ids.reduce((total, id) => total + get(id), 0) * 3;
+      return {
+        blueGH_DirtScore: sum(blueDirtIDs),
+        redGH_DirtScore: sum(redDirtIDs)
+      };
+    }
+    function calculateGreenhouseSeedScore() {
+      const get = (id) => parseInt(document.getElementById(id)?.value) || 0;
+      const blueSeedIDs = [
+        'GHBlue1_Seed', 'GHBlue2_Seed', 'GHBlue3_Seed',
+        'GHBlue4_Seed', 'GHBlue5_Seed', 'GHBlue6_Seed'
+      ];
+      const redSeedIDs = [
+        'GHRed1_Seed', 'GHRed2_Seed', 'GHRed3_Seed',
+        'GHRed4_Seed', 'GHRed5_Seed', 'GHRed6_Seed'
+      ];
+      const sum = (ids) => ids.reduce((total, id) => total + get(id), 0)  * 3;
+      return {
+        blueGH_SeedScore: sum(blueSeedIDs),
+        redGH_SeedScore: sum(redSeedIDs)
+      };
+    }
+    function calculateProductionScore() {
+      const get = (id) => parseInt(document.getElementById(id)?.value) || 0;
+      const blueNames = ['GHBlue1', 'GHBlue2', 'GHBlue3', 'GHBlue4', 'GHBlue5', 'GHBlue6'];
+      const redNames = ['GHRed1', 'GHRed2', 'GHRed3', 'GHRed4', 'GHRed5', 'GHRed6'];
+      let blueCount = 0;
+      let redCount = 0;
+      blueNames.forEach(name => {
+        const dirt = get(`${name}_Dirt`);
+        const seed = get(`${name}_Seed`);
+        if (dirt === 1 && seed === 1) blueCount++;
+      });
+      redNames.forEach(name => {
+        const dirt = get(`${name}_Dirt`);
+        const seed = get(`${name}_Seed`);
+        if (dirt === 1 && seed === 1) redCount++;
+      });
+      return {
+        blueProductionPoints: blueCount * 5,
+        redProductionPoints: redCount * 5
+      };
+    }
+    function calculateTeamScores(blueAllianceScore, redAllianceScore) {
+      const isChecked = (id) => document.getElementById(id)?.checked;
+      const scoreBlue1 = (!isChecked('blue1Show') || isChecked('blue1RedCard')) ? 0 : blueAllianceScore;
+      const scoreBlue2 = (!isChecked('blue2Show') || isChecked('blue2RedCard')) ? 0 : blueAllianceScore;
+      const scoreRed1  = (!isChecked('red1Show')  || isChecked('red1RedCard'))  ? 0 : redAllianceScore;
+      const scoreRed2  = (!isChecked('red2Show')  || isChecked('red2RedCard'))  ? 0 : redAllianceScore;
+      return {
+        scoreBlue1,
+        scoreBlue2,
+        scoreRed1,
+        scoreRed2
+      };
+    }
+    function saveTempScore() {
+      // Get the matchNumber directly from the select element at the time of the click
+      const matchNumberSelect = document.getElementById('matchNumber');
+      const currentMatchNumber = matchNumberSelect ? matchNumberSelect.value : '';
+      console.log("saveTempScore: Reading matchNumber from select element:", currentMatchNumber); // NEW DEBUG LOG
+
+      const ghScore = calculateGHScore();
+      const garden = calculateGardenScore();
+      const harvest = calculateHarvestScore();
+      const balance = calculateBalanceCoefficient();
+      const bumper = calculateBumperCropScore();
+      const dirt = calculateGreenhouseDirtScore();
+      const seed = calculateGreenhouseSeedScore();
+      const production = calculateProductionScore();
+      const total = calculateTotalScore();
+      const finalScore = calculateTeamScores(total.blueAllianceScore, total.redAllianceScore);
+      const dataToSave = {
+        matchNumber: currentMatchNumber, // Use the value read directly here
+        blueTeam1: document.getElementById('blueTeam1').textContent,
+        blueTeam2: document.getElementById('blueTeam2').textContent,
+        redTeam1: document.getElementById('redTeam1').textContent,
+        redTeam2: document.getElementById('redTeam2').textContent,
+        blueScore: total.blueAllianceScore,
+        redScore: total.redAllianceScore,
+        scoreBlue1: finalScore.scoreBlue1,
+        scoreBlue2: finalScore.scoreBlue2,
+        scoreRed1: finalScore.scoreRed1,
+        scoreRed2: finalScore.scoreRed2,
+        GHBlue_Dirt: dirt.blueGH_DirtScore,
+        GHBlue_Seed: seed.blueGH_SeedScore,
+        blueProductionPoints: production.blueProductionPoints,
+        GHRed_Dirt: dirt.redGH_DirtScore,
+        GHRed_Seed: seed.redGH_SeedScore,
+        redProductionPoints: production.redProductionPoints,
+        blueGarden: garden.blueGarden,
+        redGarden: garden.redGarden,
+        blueHarvest: harvest.harvestScoreEach,
+        redHarvest: harvest.harvestScoreEach,
+        balanceCoefficient: balance,
+        redBumperCrop: bumper.bumperCropScoreEach,
+        blueBumperCrop: bumper.bumperCropScoreEach,
+        blueFouls: parseInt(document.getElementById('blueFouls').value) || 0,
+        redFouls: parseInt(document.getElementById('redFouls').value) || 0,
+        blueYellowCard:
+          (parseInt(document.getElementById('blue1YellowCard').value) || 0) +
+          (parseInt(document.getElementById('blue2YellowCard').value) || 0),
+        redYellowCard:
+          (parseInt(document.getElementById('red1YellowCard').value) || 0) +
+          (parseInt(document.getElementById('red2YellowCard').value) || 0),
+        blue1RedCard: document.getElementById('blue1RedCard').checked,
+        blue2RedCard: document.getElementById('blue2RedCard').checked,
+        red1RedCard: document.getElementById('red1RedCard').checked,
+        red2RedCard: document.getElementById('red2RedCard').checked
+      };
+
+      // Kiểm tra nếu matchNumber bị rỗng trước khi gửi yêu cầu
+      if (!dataToSave.matchNumber) {
+          console.error("Error: matchNumber is empty. Cannot save or show score. Please select a match.");
+          // Bạn có thể hiển thị thông báo lỗi cho người dùng ở đây
+          return;
+      }
+
+      console.log("Attempting to save temp score and show score for match:", dataToSave.matchNumber, "on field:", FIELD_ID); // Debugging log
+      fetch('/save_temp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dataToSave)
+      })
+        .then(res => res.json())
+        .then((response) => {
+          console.log("Save temp response:", response); // Debugging log
+          if (response.success === false) {
+              console.error("Error saving temp score:", response.message); // Debugging log
+              // Bạn có thể hiển thị lỗi này cho người dùng
+              return;
+          }
+          socket.emit("show_score_request", {
+            matchNumber: dataToSave.matchNumber,
+            blueTeam1: dataToSave.blueTeam1,
+            blueTeam2: dataToSave.blueTeam2,
+            redTeam1: dataToSave.redTeam1,
+            redTeam2: dataToSave.redTeam2,
+            blueScore: dataToSave.blueScore,
+            redScore: dataToSave.redScore,
+            GHBlue_Dirt: dataToSave.GHBlue_Dirt,
+            GHBlue_Seed: dataToSave.GHBlue_Seed,
+            GHRed_Dirt: dataToSave.GHRed_Dirt,
+            GHRed_Seed: dataToSave.GHRed_Seed,
+            blueProductionPoints: dataToSave.blueProductionPoints,
+            redProductionPoints: dataToSave.redProductionPoints,
+            blueGarden: dataToSave.blueGarden,
+            redGarden: dataToSave.redGarden,
+            blueHarvest: dataToSave.blueHarvest,
+            redHarvest: dataToSave.redHarvest,
+            redBumperCrop: dataToSave.redBumperCrop,
+            blueBumperCrop: dataToSave.blueBumperCrop,
+            blueFouls: dataToSave.blueFouls,
+            redFouls: dataToSave.redFouls,
+            blueYellowCard: dataToSave.blueYellowCard,
+            redYellowCard: dataToSave.redYellowCard,
+            blue1RedCard: dataToSave.blue1RedCard,
+            blue2RedCard: dataToSave.blue2RedCard,
+            red1RedCard: dataToSave.red1RedCard,
+            red2RedCard: dataToSave.red2RedCard,
+            scoreBlue1: dataToSave.scoreBlue1,
+            scoreBlue2: dataToSave.scoreBlue2,
+            scoreRed1: dataToSave.scoreRed1,
+            scoreRed2: dataToSave.scoreRed2,
+            balanceCoefficient: dataToSave.balanceCoefficient,
+            field_id: FIELD_ID // Thêm field_id vào đây
+          });
+          console.log("Emitted show_score_request for field:", FIELD_ID); // Debugging log
+        })
+        .catch(error => console.error('Error during save_temp fetch:', error)); // Debugging log
+    };
+  </script>
+</body>
+</html>

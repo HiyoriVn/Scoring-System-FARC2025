@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BẢNG XẾP HẠNG</title>
+    <style>
+        /* General body and page styling */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background-color: #0d1117;
+            background-image: url('{{ url_for('static', filename='ranking_1.png') }}');
+            color: white;
+            font-weight: bold;
+            text-transform: uppercase;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 80px;
+            box-sizing: border-box;
+        }
+
+        .page-title {
+            font-size: 3.2em;
+            color: #ffd700;
+            margin-bottom: 40px;
+            text-align: center;
+            text-shadow: 0 0 15px rgba(255, 215, 0, 0.7);
+            letter-spacing: 2px;
+        }
+
+        /* Container for the ranking table */
+        .ranking-container {
+            width: 95%;
+            max-width: 1400px;
+            background-color: #161b22;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+            position: relative;
+        }
+
+        /* Header of the ranking table */
+        .ranking-header {
+            display: grid;
+            grid-template-columns: 0.5fr 3fr 1fr 1fr 1fr 0.8fr 0.8fr;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        /* Scrollable list of ranking data */
+        .ranking-list {
+            display: grid;
+            grid-template-columns: 0.5fr 3fr 1fr 1fr 1fr 0.8fr 0.8fr;
+            grid-auto-rows: minmax(50px, auto);
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        /* General styling for each grid cell */
+        .grid-cell {
+            padding: 15px 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 50px;
+            color: white;
+            font-size: 1.2em;
+            text-align: center;
+            word-break: break-word;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Specific styling for the header cells */
+        .ranking-header-cell {
+            background-color: #0056b3;
+            background-image: linear-gradient(to bottom, #d04a37, #de8e30);
+            color: white;
+            font-size: 1.3em;
+            padding: 20px 10px;
+            border-bottom: none;
+        }
+
+        /* Rounded corners for the header */
+        .ranking-header-cell:first-child {
+            border-top-left-radius: 10px;
+        }
+
+        .ranking-header-cell:nth-child(7) {
+            border-top-right-radius: 10px;
+        }
+
+        /* Highlight the ranking number */
+        .ranking-container .grid-cell:nth-child(7n+1) {
+            font-size: 1.2em;
+            color: #ffd700;
+        }
+
+        /* Align team names to the left */
+        .ranking-container .grid-cell:nth-child(7n+2) {
+            justify-content: flex-start;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding-left: 20px;
+        }
+
+        /* Responsive design for different screen sizes */
+        @media (max-width: 1024px) {
+            .page-title { font-size: 2.5em; }
+            .ranking-header-cell { font-size: 1em; padding: 15px 8px; }
+            .grid-cell { font-size: 0.9em; padding: 12px 8px; min-height: 45px; }
+            .ranking-list { max-height: 55vh; }
+        }
+
+        @media (max-width: 768px) {
+            .ranking-header, .ranking-list {
+                grid-template-columns: 0.5fr 1.5fr 1fr 1fr;
+            }
+            .page-title { font-size: 2em; margin-bottom: 20px; }
+            .ranking-header-cell { font-size: 0.9em; padding: 10px 5px; }
+            .grid-cell { font-size: 0.8em; padding: 10px 5px; min-height: 40px; }
+            .hide-on-small { display: none; }
+            .ranking-list { max-height: 50vh; }
+        }
+
+        @media (max-width: 480px) {
+            .ranking-header, .ranking-list {
+                grid-template-columns: 0.5fr 1.5fr 1fr;
+            }
+            .page-title { font-size: 1.5em; margin-bottom: 15px; }
+            .ranking-header-cell { font-size: 0.8em; padding: 8px 3px; }
+            .grid-cell { font-size: 0.7em; padding: 8px 3px; min-height: 35px; }
+            .hide-on-small-extra { display: none; }
+            .ranking-list { max-height: 45vh; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1 class="page-title" style="opacity: 0">BẢNG XẾP HẠNG</h1>
+
+    <div class="ranking-container">
+        <!-- Header cố định, không cuộn -->
+        <div class="ranking-header">
+            <div class="grid-cell ranking-header-cell">HẠNG</div>
+            <div class="grid-cell ranking-header-cell" style="text-align: left;">ĐỘI THI</div>
+            <div class="grid-cell ranking-header-cell">TỔNG ĐIỂM TRẬN</div>
+            <div class="grid-cell ranking-header-cell">ĐIỂM CAO #1</div>
+            <div class="grid-cell ranking-header-cell hide-on-small">ĐIỂM CAO #2</div>
+            <div class="grid-cell ranking-header-cell hide-on-small hide-on-small-extra">TỔNG ĐIỂM THNS</div>
+            <div class="grid-cell ranking-header-cell hide-on-small hide-on-small-extra">SỐ TRẬN ĐÃ ĐẤU</div>
+        </div>
+        <!-- Danh sách có thể cuộn -->
+        <div class="ranking-list" id="ranking-list">
+            <!-- Dữ liệu ranking sẽ được chèn vào đây -->
+        </div>
+    </div>
+<script>
+    let scrollInterval;
+    let isHovering = false;
+    let isDelayed = false;
+    let allRankingData = []; // Store all the ranking data
+
+    async function loadRanking() {
+        try {
+            // Replace with your actual API endpoint
+            const response = await fetch("/get_ranking_data");
+            const data = await response.json();
+            allRankingData = data; // Save all data
+
+            const container = document.getElementById("ranking-list");
+            container.innerHTML = ''; // Clear old data
+
+            // Load all data into the list to enable full scrolling
+            allRankingData.forEach((team, index) => {
+                const rankingCell = document.createElement("div");
+                rankingCell.className = "grid-cell";
+                rankingCell.textContent = team.ranking;
+
+                const teamNameCell = document.createElement("div");
+                teamNameCell.className = "grid-cell";
+                teamNameCell.textContent = team.teamName;
+
+                const totalScoreCell = document.createElement("div");
+                totalScoreCell.className = "grid-cell";
+                totalScoreCell.textContent = team.totalMatchScore.toFixed(2);
+
+                const highest1Cell = document.createElement("div");
+                highest1Cell.className = "grid-cell";
+                highest1Cell.textContent = team.highest1.toFixed(2);
+
+                const highest2Cell = document.createElement("div");
+                highest2Cell.className = "grid-cell hide-on-small";
+                highest2Cell.textContent = team.highest2.toFixed(2);
+
+                const harvestCell = document.createElement("div");
+                harvestCell.className = "grid-cell hide-on-small hide-on-small-extra";
+                harvestCell.textContent = team.totalHarvestScore;
+
+                const matchCountCell = document.createElement("div");
+                matchCountCell.className = "grid-cell hide-on-small hide-on-small-extra";
+                matchCountCell.textContent = team.matchesPlayed;
+
+                container.appendChild(rankingCell);
+                container.appendChild(teamNameCell);
+                container.appendChild(totalScoreCell);
+                container.appendChild(highest1Cell);
+                container.appendChild(highest2Cell);
+                container.appendChild(harvestCell);
+                container.appendChild(matchCountCell);
+            });
+
+            startAutoScroll();
+
+        } catch (error) {
+            console.error("Không thể tải dữ liệu xếp hạng:", error);
+        }
+    }
+
+    function startAutoScroll() {
+        const rankingList = document.getElementById('ranking-list');
+        const scrollAmount = 1.5;
+        const delayTime = 1500; // 5 seconds delay
+
+        if (scrollInterval) clearInterval(scrollInterval);
+
+        rankingList.addEventListener('mouseenter', () => {
+            isHovering = true;
+        });
+        rankingList.addEventListener('mouseleave', () => {
+            isHovering = false;
+        });
+
+        scrollInterval = setInterval(() => {
+            if (!isHovering && !isDelayed) {
+                rankingList.scrollTop += scrollAmount;
+
+                if (rankingList.scrollTop + rankingList.clientHeight >= rankingList.scrollHeight) {
+                    isDelayed = true;
+                    clearInterval(scrollInterval);
+
+                    setTimeout(() => {
+                        rankingList.scrollTop = 0;
+                        isDelayed = false;
+                        startAutoScroll();
+                    }, delayTime);
+                }
+            }
+        }, 50); // Scrolling speed (lower is faster)
+    }
+
+    window.onload = loadRanking;
+
+    setInterval(loadRanking, 30000);
+</script>
+</body>
+</html>

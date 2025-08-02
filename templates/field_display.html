@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Màn hình đếm ngược</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f0f0;
+            background-image: url('{{ url_for('static', filename='countdown_bg_new.png') }}');
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+            display: flex;
+            justify-content: center;
+            text-transform: uppercase;
+            align-items: center;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        .container {
+            background-color: transparent;
+            border-radius: 18px;
+            padding-top: 0px;
+            margin-top: 220px;
+            width: 90%;
+            max-width: 1200px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: calc(100vh - 220px);
+        }
+        h1 {
+            font-size: 5.5rem;
+            font-weight: bold;
+            color: white;
+        }
+        #countdown {
+            font-size: 18rem;
+            font-weight: bold;
+            color: white;
+        }
+        .teams {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 5rem;
+        }
+        .team {
+            text-align: center;
+        }
+        .team h2 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin-bottom: 0.3rem;
+        }
+        .team-names {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .team-names div {
+            font-weight: bold;
+            font-size: 26px;
+            margin-top: 6px;
+            color: white;
+            white-space: nowrap;
+        }
+
+        .match-score-container {
+            display: none;
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            background-color: white;
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .match-score-container > .field-grid {
+            width: 100%;
+            height: 100%;
+        }
+
+    </style>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container" id="countdownContainer">
+        <h1 id="matchNumber">Trận Đấu</h1>
+        <div id="countdown">02:30</div>
+        <div class="teams">
+            <div class="team" style="padding-right: 45px">
+                <h2 class="text-blue-600" style="color: #0173c9">Liên Minh Xanh </h2>
+                <div class="team-names" id="blueAlliance">
+                    <div id="blueTeam1">--</div>
+                    <div id="blueTeam2">--</div>
+                </div>
+            </div>
+            <div class="team" style="padding-left: 45px">
+                <h2 class="text-red-600" style="color: #d22a28">Liên Minh Đỏ </h2>
+                <div class="team-names" id="redAlliance">
+                    <div id="redTeam1">--</div>
+                    <div id="redTeam2">--</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="matchScoreContainer" class="match-score-container">
+        </div>
+
+    <script>
+        const FIELD_ID = "{{ field_id }}";
+        const socket = io();
+        const countdownElement = document.getElementById('countdown');
+        const blueTeam1 = document.getElementById('blueTeam1');
+        const blueTeam2 = document.getElementById('blueTeam2');
+        const redTeam1 = document.getElementById('redTeam1');
+        const redTeam2 = document.getElementById('redTeam2');
+        const matchDisplayTitle = document.getElementById('matchNumber');
+
+        const countdownContainer = document.getElementById('countdownContainer');
+        const matchScoreContainer = document.getElementById('matchScoreContainer');
+
+        socket.on('connect', () => {
+            console.log(`Display panel connected. SID: ${socket.id}. Joining room: ${FIELD_ID}`); // Debugging log
+            socket.emit('join_room', { field_id: FIELD_ID });
+        });
+
+        socket.on('countdown', (data) => {
+            if (data.field_id === FIELD_ID) {
+                console.log(`Received countdown for field ${FIELD_ID}: ${data.value}`); // Debugging log
+                countdownElement.textContent = data.value;
+            }
+        });
+        socket.on('timer_update', (data) => {
+            if (data.field_id === FIELD_ID) {
+                console.log(`Received timer_update for field ${FIELD_ID}: ${data.time}`); // Debugging log
+                countdownElement.textContent = data.time;
+            }
+        });
+        socket.on('update_teams_display', (data) => {
+            if (data.field_id === FIELD_ID) {
+                console.log(`Received update_teams_display for field ${FIELD_ID}:`, data); // Debugging log
+                blueTeam1.textContent = data.blueTeam1;
+                blueTeam2.textContent = data.blueTeam2;
+                redTeam1.textContent = data.redTeam1;
+                redTeam2.textContent = data.redTeam2;
+                matchDisplayTitle.textContent = `Trận Đấu ${data.matchNumber}`;
+            }
+        });
+
+        socket.on('show_score_data', (data) => {
+            console.log("Received show_score_data event:", data);
+            console.log("Current FIELD_ID:", FIELD_ID);
+            if (data.field_id === FIELD_ID) {
+                console.log("Field ID match. Proceeding to display score.");
+                countdownContainer.style.display = 'none';
+                matchScoreContainer.style.display = 'flex';
+
+                fetch("/get_match_score_content")
+                    .then(res => res.text())
+                    .then(html => {
+                        matchScoreContainer.innerHTML = html;
+                        console.log("Loaded match_score.html content.");
+
+                        document.getElementById("matchNumberDisplay").textContent = `Trận ${data.matchNumber}`;
+                        document.getElementById("blueTeam1Name").textContent = data.blueTeam1;
+                        document.getElementById("blueTeam2Name").textContent = data.blueTeam2;
+                        document.getElementById("redTeam1Name").textContent = data.redTeam1;
+                        document.getElementById("redTeam2Name").textContent = data.redTeam2;
+
+                        document.getElementById("blueAllianceScore").textContent = data.blueScore;
+                        document.getElementById("redAllianceScore").textContent = data.redScore;
+                        document.getElementById("blue1Score").textContent = data.scoreBlue1;
+                        document.getElementById("blue2Score").textContent = data.scoreBlue2;
+                        document.getElementById("red1Score").textContent = data.scoreRed1;
+                        document.getElementById("red2Score").textContent = data.scoreRed2;
+
+                        document.getElementById("blueDirt").textContent = data.GHBlue_Dirt;
+                        document.getElementById("redDirt").textContent = data.GHRed_Dirt;
+                        document.getElementById("blueSeed").textContent = data.GHBlue_Seed;
+                        document.getElementById("redSeed").textContent = data.GHRed_Seed;
+                        document.getElementById("blueProduction").textContent = data.blueProductionPoints;
+                        document.getElementById("redProduction").textContent = data.redProductionPoints;
+                        document.getElementById("blueGarden").textContent = data.blueGarden;
+                        document.getElementById("redGarden").textContent = data.redGarden;
+                        document.getElementById("blueHarvest").textContent = data.blueHarvest;
+                        document.getElementById("redHarvest").textContent = data.redHarvest;
+                        document.getElementById("blueBumperCrop").textContent = data.blueBumperCrop;
+                        document.getElementById("redBumperCrop").textContent = data.redBumperCrop;
+                        document.getElementById("blueCoefficient").textContent = data.balanceCoefficient;
+                        document.getElementById("redCoefficient").textContent = data.balanceCoefficient;
+                        document.getElementById("blueMinor").textContent = data.blueFouls;
+                        document.getElementById("redMinor").textContent = data.redFouls;
+                        document.getElementById("blueYellowCard").textContent = data.blueYellowCard;
+                        document.getElementById("redYellowCard").textContent = data.redYellowCard;
+
+                        document.getElementById("blue1RedCard").textContent = data.blue1RedCard ? 1 : 0;
+                        document.getElementById("blue2RedCard").textContent = data.blue2RedCard ? 1 : 0;
+                        document.getElementById("red1RedCard").textContent = data.red1RedCard ? 1 : 0;
+                        document.getElementById("red2RedCard").textContent = data.red2RedCard ? 1 : 0;
+                    })
+                    .catch(error => console.error('Error loading match_score.html:', error));
+            } else {
+                console.log("Field ID mismatch. Ignoring show_score_data event for field:", data.field_id); // Debugging log
+            }
+        });
+
+        socket.on('hide_score_data', (data) => {
+            if (data.field_id === FIELD_ID) {
+                console.log("Received hide_score_data. Hiding score for field:", FIELD_ID); // Debugging log
+                countdownContainer.style.display = 'flex';
+                matchScoreContainer.style.display = 'none';
+            }
+        });
+
+        // Thêm lắng nghe sự kiện error_message
+        socket.on('error_message', (data) => {
+            // Chỉ hiển thị lỗi nếu nó dành cho field_id hiện tại hoặc nếu không có field_id cụ thể (lỗi chung)
+            if (data.field_id === FIELD_ID || data.field_id === undefined) {
+                console.error("Received error message:", data.message);
+                // Bạn có thể hiển thị thông báo này cho người dùng, ví dụ bằng một modal
+                // alert(`Lỗi: ${data.message}`); // Tránh dùng alert trong môi trường iframe
+            }
+        });
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LỊCH THI ĐẤU</title>
+    <style>
+        /* CSS cho toàn bộ trang web và bố cục chung */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background-color: #0d1117;
+            background-image: url('{{ url_for('static', filename='Qualification_schedule.png') }}');
+            color: white;
+            font-weight: bold;
+            text-transform: uppercase;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 140px;
+            box-sizing: border-box;
+        }
+
+        .page-title {
+            font-size: 3.2em;
+            color: #ffd700;
+            margin-bottom: 40px;
+            text-align: center;
+            text-shadow: 0 0 15px rgba(255, 215, 0, 0.7);
+            letter-spacing: 2px;
+        }
+
+        /* Container chứa toàn bộ bảng lịch thi đấu */
+        .schedule-container {
+            width: 95%;
+            max-width: 1400px;
+            background-color: #161b22;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+            position: relative;
+        }
+
+        /* Dòng tiêu đề của bảng, cố định không cuộn */
+        .schedule-header {
+            display: grid;
+            grid-template-columns: 0.5fr 1.5fr 1.5fr 1.5fr 1.5fr 1fr 1fr;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        /* Khu vực danh sách trận đấu, có thể cuộn */
+        .schedule-list {
+            display: grid;
+            grid-template-columns: 0.5fr 1.5fr 1.5fr 1.5fr 1.5fr 1fr 1fr;
+            grid-auto-rows: minmax(50px, auto);
+            max-height: 60vh; /* Chiều cao tối đa, có thể chỉnh sửa */
+        }
+
+        /* Thêm class để kích hoạt cuộn khi cần thiết */
+        .schedule-list.scrollable {
+            overflow-y: auto;
+        }
+
+        /* Ô chung trong bảng */
+        .grid-cell {
+            padding: 15px 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 50px;
+            color: white;
+            font-size: 1em;
+            text-align: center;
+            word-break: break-word;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Ô tiêu đề */
+        .schedule-header-cell {
+            background-color: #0056b3;
+            background-image: linear-gradient(to bottom, #d04a37, #de8e30);
+            color: white;
+            font-size: 1.15em;
+            padding: 20px 10px;
+            border-bottom: none;
+        }
+
+        /* Bo tròn góc cho tiêu đề */
+        .schedule-header-cell:first-child {
+            border-top-left-radius: 10px;
+        }
+
+        .schedule-header-cell:last-child {
+            border-top-right-radius: 10px;
+        }
+
+        /* Canh giữa cho các cột trừ đội thi */
+        .schedule-header .grid-cell:not(:nth-child(2)) {
+            justify-content: center;
+        }
+
+        /* Canh lề trái cho tên đội */
+        .schedule-list .grid-cell:nth-child(7n+2),
+        .schedule-list .grid-cell:nth-child(7n+3),
+        .schedule-list .grid-cell:nth-child(7n+4),
+        .schedule-list .grid-cell:nth-child(7n+5) {
+            justify-content: center;
+            text-align: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding-left: 5px;
+        }
+
+        /* Responsive design cho các màn hình khác nhau */
+        @media (max-width: 1024px) {
+            .page-title { font-size: 2.5em; }
+            .schedule-header-cell { font-size: 1em; padding: 15px 8px; }
+            .grid-cell { font-size: 0.9em; padding: 12px 8px; min-height: 45px; }
+            .schedule-list { max-height: 55vh; }
+        }
+
+        @media (max-width: 768px) {
+            .schedule-header, .schedule-list {
+                grid-template-columns: 0.5fr 1.5fr 1.5fr 1.5fr 1.5fr 1fr 1fr;
+            }
+            .page-title { font-size: 2em; margin-bottom: 20px; }
+            .schedule-header-cell { font-size: 0.9em; padding: 10px 5px; }
+            .grid-cell { font-size: 0.8em; padding: 10px 5px; min-height: 40px; }
+            .hide-on-small { display: none; }
+            .schedule-list { max-height: 50vh; }
+        }
+
+        @media (max-width: 480px) {
+            .schedule-header, .schedule-list {
+                grid-template-columns: 0.5fr 2fr 2fr 1fr;
+            }
+            .page-title { font-size: 1.5em; margin-bottom: 15px; }
+            .schedule-header-cell { font-size: 0.8em; padding: 8px 3px; }
+            .grid-cell { font-size: 0.7em; padding: 8px 3px; min-height: 35px; }
+            .schedule-header-cell:nth-child(4), .schedule-header-cell:nth-child(5), .schedule-header-cell:nth-child(7) { display: none; }
+            .hide-on-small-extra { display: none; }
+            .schedule-list { max-height: 45vh; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1 class="page-title"> </h1>
+
+    <div class="schedule-container">
+        <!-- Header cố định, không cuộn -->
+        <div class="schedule-header">
+            <div class="grid-cell schedule-header-cell">TRẬN</div>
+            <div class="grid-cell schedule-header-cell">XANH 1</div>
+            <div class="grid-cell schedule-header-cell">XANH 2</div>
+            <div class="grid-cell schedule-header-cell">ĐỎ 1</div>
+            <div class="grid-cell schedule-header-cell">ĐỎ 2</div>
+            <div class="grid-cell schedule-header-cell">SÂN</div>
+            <div class="grid-cell schedule-header-cell">VÒNG</div>
+        </div>
+        <!-- Khu vực hiển thị danh sách cuộn -->
+        <div class="schedule-list" id="schedule-list">
+            <!-- Dữ liệu lịch thi đấu sẽ được chèn vào đây bởi JavaScript -->
+        </div>
+    </div>
+<script>
+    // Khai báo các biến toàn cục để quản lý trạng thái
+    let scrollInterval;
+    let isHovering = false;
+    let isDelayed = false;
+    let allScheduleData = []; // Lưu trữ tất cả dữ liệu lịch thi đấu
+
+    // Hàm để tải dữ liệu từ API và hiển thị
+    async function loadSchedule() {
+        try {
+            // NOTE: Bạn cần tạo một endpoint trong Flask để lấy dữ liệu lịch thi đấu
+            // Endpoint này nên trả về một danh sách các dictionary tương ứng với Schedule.to_dict()
+            // Ví dụ: '/get_schedule_data'
+            const response = await fetch("/get_schedule_data");
+            const data = await response.json();
+            allScheduleData = data; // Lưu tất cả dữ liệu để cuộn đầy đủ
+
+            const container = document.getElementById("schedule-list");
+            container.innerHTML = ''; // Xóa dữ liệu cũ trước khi cập nhật
+
+            // Render tất cả các trận đấu
+            renderMatches(allScheduleData);
+
+            // Tweak: Số lượng trận đấu tối thiểu để bắt đầu cuộn
+            const scrollThreshold = 10;
+
+            // Kiểm tra nếu có nhiều hơn số trận quy định thì mới bắt đầu cuộn
+            if (allScheduleData.length > scrollThreshold) {
+                container.classList.add('scrollable');
+                const initialDelay = 5000; // Thời gian trễ ban đầu (miligiây). Hiện đang là 5 giây.
+                setTimeout(() => {
+                    startAutoScroll();
+                }, initialDelay);
+            } else {
+                // Nếu có ít hơn hoặc bằng 10 trận, xóa class 'scrollable' để đảm bảo thanh cuộn không xuất hiện
+                container.classList.remove('scrollable');
+                if (scrollInterval) clearInterval(scrollInterval);
+            }
+
+        } catch (error) {
+            // Xử lý lỗi nếu không thể tải dữ liệu
+            console.error("Lỗi: Không thể tải dữ liệu lịch thi đấu:", error);
+            // Có thể thêm một thông báo lỗi vào giao diện người dùng nếu cần
+            document.getElementById("schedule-list").innerHTML = '<p style="text-align: center; color: red;">Không thể tải lịch thi đấu. Vui lòng kiểm tra lại kết nối hoặc API.</p>';
+        }
+    }
+
+    // Hàm chung để render các hàng dữ liệu
+    function renderMatches(data) {
+        const container = document.getElementById("schedule-list");
+        container.innerHTML = ''; // Xóa dữ liệu cũ
+        data.forEach(match => {
+            const matchNumberCell = document.createElement("div");
+            matchNumberCell.className = "grid-cell";
+            matchNumberCell.textContent = match.matchNumber;
+
+            const blueTeam1Cell = document.createElement("div");
+            blueTeam1Cell.className = "grid-cell";
+            blueTeam1Cell.textContent = match.blueTeam1;
+
+            const blueTeam2Cell = document.createElement("div");
+            blueTeam2Cell.className = "grid-cell";
+            blueTeam2Cell.textContent = match.blueTeam2;
+
+            const redTeam1Cell = document.createElement("div");
+            redTeam1Cell.className = "grid-cell";
+            redTeam1Cell.textContent = match.redTeam1;
+
+            const redTeam2Cell = document.createElement("div");
+            redTeam2Cell.className = "grid-cell";
+            redTeam2Cell.textContent = match.redTeam2;
+
+            const fieldCell = document.createElement("div");
+            fieldCell.className = "grid-cell";
+            fieldCell.textContent = match.field;
+
+            const roundCell = document.createElement("div");
+            roundCell.className = "grid-cell";
+            roundCell.textContent = match.round;
+
+            // Thêm các ô vào container
+            container.appendChild(matchNumberCell);
+            container.appendChild(blueTeam1Cell);
+            container.appendChild(blueTeam2Cell);
+            container.appendChild(redTeam1Cell);
+            container.appendChild(redTeam2Cell);
+            container.appendChild(fieldCell);
+            container.appendChild(roundCell);
+        });
+    }
+
+    // Hàm điều khiển việc tự động cuộn
+    function startAutoScroll() {
+        const scheduleList = document.getElementById('schedule-list');
+        const scrollAmount = 1; // Tweak: Số pixel cuộn mỗi lần. Giảm số này để cuộn chậm hơn.
+        const delayTime = 5000; // Tweak: Thời gian trễ ở cuối danh sách (miligiây). Đang đặt là 5 giây.
+
+        if (scrollInterval) clearInterval(scrollInterval); // Xóa interval cũ để tránh xung đột
+
+        // Dừng cuộn khi người dùng di chuột vào bảng
+        scheduleList.addEventListener('mouseenter', () => {
+            isHovering = true;
+        });
+        scheduleList.addEventListener('mouseleave', () => {
+            isHovering = false;
+        });
+
+        scrollInterval = setInterval(() => {
+            if (!isHovering && !isDelayed) {
+                scheduleList.scrollTop += scrollAmount;
+
+                // Kiểm tra nếu đã cuộn đến cuối
+                if (scheduleList.scrollTop + scheduleList.clientHeight >= scheduleList.scrollHeight) {
+                    isDelayed = true; // Bắt đầu trạng thái trễ
+                    clearInterval(scrollInterval); // Dừng cuộn
+
+                    setTimeout(() => {
+                        scheduleList.scrollTop = 0; // Reset về đầu danh sách
+                        isDelayed = false; // Kết thúc trạng thái trễ
+                        startAutoScroll(); // Khởi động lại quá trình cuộn
+                    }, delayTime);
+                }
+            }
+        }, 50); // Tweak: Tốc độ cuộn. Số càng nhỏ, cuộn càng nhanh.
+    }
+
+    // Khởi tạo: Tải dữ liệu khi trang web được tải
+    window.onload = loadSchedule;
+
+    // Tự động cập nhật dữ liệu mỗi 30 giây
+    setInterval(loadSchedule, 30000); // Tweak: Có thể thay đổi khoảng thời gian cập nhật
+</script>
+</body>
+</html>

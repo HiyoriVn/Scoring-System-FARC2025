@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Event Info - FARC</title>
+  <style>
+    body {
+      font-family: "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #fff;
+      color: #000;
+    }
+
+    .top-bar {
+      background-color: #f0f8ff;
+      border-bottom: 3px solid #ccc;
+      padding: 6px;
+      text-align: center;
+      font-style: italic;
+      font-size: 14px;
+    }
+
+    .nav-bar {
+      background-color: #1d3c4e;
+      color: white;
+      display: flex;
+      align-items: center;
+      padding: 10px 20px;
+      justify-content: space-between;
+    }
+
+    .nav-bar .logo {
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    .nav-bar .menu {
+      display: flex;
+      gap: 30px;
+    }
+
+    .nav-bar .menu a {
+      color: white;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .container {
+      padding: 20px 40px;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      font-size: 20px;
+      margin-top: 30px;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 5px;
+    }
+
+    ul {
+      list-style-type: disc;
+      padding-left: 20px;
+    }
+
+    ul ul {
+      list-style-type: circle;
+      padding-left: 20px;
+    }
+
+    a {
+      color: #0074d9;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="top-bar">
+    <em>Scoring System Testing running at 192.168.x.x</em><br>
+    Test Version Scoring System
+  </div>
+
+  <div class="nav-bar">
+    <div class="logo">Scoring Management System</div>
+    <div class="menu">
+      <a href="/role/">Event Admin</a>
+      <a href="#">Help</a>
+      <a href="/login/">Login</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <h1>FPT THPT Robotics Challenge</h1>
+
+    <h2>Event Info</h2>
+    <ul>
+      <li>Qualification
+        <ul>
+          <li><a href="/schedule/">Schedule</a></li>
+          <li><a href="/rankings/qualification/">Rankings</a></li>
+        </ul>
+      </li>
+      <li>Playoff
+        <ul>
+          <li><a href="/playoff/">Schedule</a></li>
+          <li><a href="/rankings/playoff/">Rankings</a></li>
+        </ul>
+      </li>
+      <li><a href="/results/">Match Results</a></li>
+    </ul>
+
+    <h2>Displays</h2>
+    <ul>
+      <li><a href="/display/">Scoring/Timing Displays</a></li>
+      <li><a href="/control/">Match Control Page</a></li>
+    </ul>
+  </div>
+
+</body>
+</html>
