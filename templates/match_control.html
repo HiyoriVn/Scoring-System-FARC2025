@@ -121,6 +121,7 @@
     <span id="countdown">02:30</span>
     <button id="showScore" onclick="saveTempScore()">Hiện điểm</button>
     <button id="hideScore" onclick="socket.emit('hide_score_request', {field_id: FIELD_ID})">Ẩn điểm</button>
+    <button id="bumperButton" onclick="bumper()">Mùa bội thu</button>
   </div>
 
   <div class="overall-layout">
@@ -498,7 +499,7 @@
 
   <audio id="thirtySecondSound" src="{{ url_for('static', filename='30seconds.mp3') }}" preload="auto"></audio>
   <audio id="endSound" src="{{ url_for('static', filename='end.mp3') }}" preload="auto"></audio>
-  <audio id="bumpperCrop" src="{{ url_for('static', filename='bumper.mp3') }}" preload="auto"></audio>
+  <audio id="bumperCrop" src="{{ url_for('static', filename='bumper.mp3') }}" preload="auto"></audio>
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
   <script>
     const FIELD_ID = "{{ field_id }}";
@@ -510,7 +511,7 @@
     let stopClicked = false;
     const countdownElement = document.getElementById('countdown');
     const startSound = document.getElementById('startSound');
-
+    const bumperCrop = document.getElementById('bumperCrop');
     const thirtySecondSound = document.getElementById('thirtySecondSound');
     const endSound = document.getElementById('endSound');
 
@@ -585,7 +586,10 @@
         showScores();
         console.log("resetInputFields completed.");
     }
-
+    function bumper() {
+      console.log("Playing bumper crop sound.");
+      bumperCrop.play();
+    }
     const updateMatch = (matchNumber) => {
       let selectedMatch = matchData.find(m => m.matchNumber === matchNumber);
 
