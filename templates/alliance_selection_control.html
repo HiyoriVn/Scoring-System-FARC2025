@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alliance Selection Control Panel</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        /* General body settings */
+        body {
+            font-family: sans-serif;
+            background-color: #00122e;
+            color: white;
+            margin: 0;
+            padding: 20px;
+            overflow: hidden;
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Main container including panels */
+        .control-container {
+            display: flex;
+            width: 100%;
+            gap: 20px;
+        }
+
+        /* Panel hiển thị các liên minh đã được chọn */
+        .alliances-panel {
+            flex-basis: 35%;
+            display: flex;
+            flex-direction: column;
+            background-color: #00224d;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        .alliances-panel h2, .teams-panel h2 {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            color: #ffd700;
+            text-align: center;
+        }
+
+        /* Sử dụng Grid cho danh sách liên minh */
+        .alliance-header {
+            display: grid;
+            grid-template-columns: 40px 1fr 1fr;
+            grid-gap: 5px;
+            margin-bottom: 5px;
+        }
+
+        .alliance-header .rank-label, .alliance-header .captain-label, .alliance-header .partner-label {
+            font-weight: bold;
+            text-align: center;
+            font-size: 1.2em;
+        }
+
+        .alliance-header .rank-label { grid-column: 1; }
+        .alliance-header .captain-label { grid-column: 2; }
+        .alliance-header .partner-label { grid-column: 3; }
+
+        .alliance-list {
+            display: grid;
+            grid-template-columns: 40px 1fr 1fr;
+            grid-gap: 5px;
+        }
+
+        .alliance-slot {
+            display: contents; /* Cho phép các phần tử con tham gia vào layout grid */
+        }
+
+        .rank {
+            background-color: #003366;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 50px;
+            box-sizing: border-box;
+            border-radius: 4px 0 0 4px;
+        }
+
+        .team-slot {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 5px 10px;
+            height: 50px;
+            box-sizing: border-box;
+            overflow: hidden;
+            font-size: 1.2em;
+            font-weight: bold;
+            border: 1px solid #00224d;
+            transition: background-color 0.3s ease;
+        }
+
+        .team-slot.captain {
+            background-color: #ff8c00;
+        }
+
+        .team-slot.partner {
+            background-color: #2ecc71;
+        }
+
+        .alliance-slot.active-alliance .rank,
+        .alliance-slot.active-alliance .captain {
+            border: 2px solid #ffd700;
+        }
+
+        .alliance-slot.active-alliance .captain {
+            border-right: none;
+        }
+
+        .alliance-slot.active-alliance .team-slot.partner {
+            border: 2px solid #ffd700;
+            border-left: none;
+        }
+
+        .team-slot.captain {
+            border-right: none;
+            border-radius: 0;
+        }
+
+        .team-slot.partner {
+            border-left: none;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .team-slot .team-number {
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        .team-slot .team-name {
+            font-size: 0.9em;
+            font-weight: normal;
+        }
+
+        /* Control buttons */
+        .control-buttons {
+            margin-top: auto; /* Đẩy nút xuống cuối cùng */
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .control-buttons button {
+            flex-grow: 1;
+            padding: 10px 20px;
+            font-size: 1em;
+            font-weight: bold;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .control-buttons .undo-button {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .control-buttons .undo-button:hover {
+            background-color: #c0392b;
+        }
+
+        .control-buttons .generate-button {
+            background-color: #2ecc71;
+            color: white;
+        }
+
+        .control-buttons .generate-button:hover {
+            background-color: #27ae60;
+        }
+
+        /* Panel hiển thị danh sách các đội còn lại */
+        .teams-panel {
+            flex-grow: 1;
+            background-color: #1a2a47;
+            padding: 20px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .teams-list-container {
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+            flex-wrap: wrap;
+            height: calc(100vh - 120px);
+            overflow-y: auto;
+        }
+
+        .teams-list-column {
+            flex: 1 1 48%;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .team-item {
+            display: flex;
+            align-items: center;
+            background-color: #e0e0e0;
+            color: black;
+            border-radius: 4px;
+            padding: 5px;
+            height: 50px; /* Cùng kích thước với ô liên minh */
+        }
+
+        .team-item:hover {
+            cursor: pointer;
+            background-color: #d0d0d0;
+        }
+
+        .team-item.unavailable {
+            background-color: #616161;
+            color: #bdbdbd;
+        }
+
+        .team-ranking-info {
+            display: flex;
+            align-items: center;
+            flex-grow: 1;
+        }
+
+        .team-rank-number {
+            background-color: #ffd700;
+            color: black;
+            padding: 5px 10px;
+            font-weight: bold;
+            min-width: 40px;
+            text-align: center;
+            border-radius: 4px;
+        }
+
+        .team-info {
+            display: flex;
+            flex-direction: column;
+            margin-left: 10px;
+            flex-grow: 1;
+        }
+
+        .team-info .team-number {
+            font-weight: bold;
+            font-size: 1.2em; /* Tăng kích thước font số đội */
+        }
+
+        .team-info .team-name {
+            font-size: 0.9em; /* Tăng kích thước font tên đội */
+            color: #333;
+        }
+
+        .team-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .team-buttons button {
+            padding: 8px;
+            font-size: 0.8em;
+            font-weight: bold;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .team-buttons .select-captain-button,
+        .team-buttons .accept-button,
+        .team-buttons .decline-button,
+        .team-buttons .unavailable-button {
+            display: none;
+        }
+
+        .team-item.available-captain .team-buttons .select-captain-button {
+            display: block;
+        }
+
+        .team-item .team-buttons.show-accept-decline .accept-button,
+        .team-item .team-buttons.show-accept-decline .decline-button {
+            display: block;
+        }
+
+        .team-item .team-buttons.show-unavailable .unavailable-button {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="control-container">
+        <div class="alliances-panel">
+            <h2>Alliance Captains</h2>
+            <div class="alliance-header">
+                <span class="rank-label">Rank</span>
+                <span class="captain-label">Captain</span>
+                <span class="partner-label">Partner</span>
+            </div>
+            <div id="alliance-list" class="alliance-list">
+            </div>
+            <div class="control-buttons">
+                <button class="undo-button">Undo</button>
+                <button class="generate-button">Generate Matches</button>
+            </div>
+        </div>
+
+        <div class="teams-panel">
+            <h2>All Teams</h2>
+            <div id="teams-list-container" class="teams-list-container">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const socket = io();
+            let allianceData = [];
+            let allTeamsData = [];
+            let currentAllianceIndex = 0;
+
+            const generateButton = document.querySelector('.generate-button');
+            generateButton.addEventListener('click', () => {
+                // Gửi sự kiện 'generate_playoff_matches' đến server
+                socket.emit('generate_playoff_matches');
+            });
+
+            // Hàm trợ giúp để tách tên đội và tên trường
+            function parseTeamID(teamID) {
+                const parts = teamID.split('_');
+                const teamNumber = parts[0];
+                const teamName = parts.slice(1).join(' ');
+                return { teamNumber, teamName };
+            }
+
+            // Hàm để tạo và hiển thị các liên minh đã chọn
+            function renderAlliances() {
+                const allianceList = document.getElementById('alliance-list');
+                allianceList.innerHTML = '';
+
+                allianceData.forEach((alliance, index) => {
+                    if (alliance.captain === null) {
+                        return; // Không hiển thị liên minh chưa có đội trưởng
+                    }
+                    const allianceSlot = document.createElement('div');
+                    allianceSlot.className = 'alliance-slot';
+                    if (index === currentAllianceIndex) {
+                        allianceSlot.classList.add('active-alliance');
+                    }
+
+                    const rankDiv = document.createElement('div');
+                    rankDiv.className = 'rank';
+                    rankDiv.textContent = index + 1;
+
+                    const captainTeamDiv = document.createElement('div');
+                    captainTeamDiv.className = 'team-slot captain';
+
+                    // Hiển thị tên đội và tên trường cho đội trưởng
+                    const { teamNumber: captainNum, teamName: captainName } = parseTeamID(alliance.captain.teamID);
+
+                    const captainNumberSpan = document.createElement('span');
+                    captainNumberSpan.className = 'team-number';
+                    captainNumberSpan.textContent = captainNum;
+
+                    const captainNameSpan = document.createElement('span');
+                    captainNameSpan.className = 'team-name';
+                    captainNameSpan.textContent = captainName;
+
+                    captainTeamDiv.appendChild(captainNumberSpan);
+                    captainTeamDiv.appendChild(captainNameSpan);
+
+                    const partnerTeamDiv = document.createElement('div');
+                    partnerTeamDiv.className = 'team-slot';
+
+                    // Hiển thị đối tác nếu đã được chọn
+                    if (alliance.partner) {
+                        partnerTeamDiv.classList.add('partner');
+                        const { teamNumber: partnerNum, teamName: partnerName } = parseTeamID(alliance.partner.teamID);
+
+                        const partnerNumberSpan = document.createElement('span');
+                        partnerNumberSpan.className = 'team-number';
+                        partnerNumberSpan.textContent = partnerNum;
+
+                        const partnerNameSpan = document.createElement('span');
+                        partnerNameSpan.className = 'team-name';
+                        partnerNameSpan.textContent = partnerName;
+
+                        partnerTeamDiv.appendChild(partnerNumberSpan);
+                        partnerTeamDiv.appendChild(partnerNameSpan);
+                    } else {
+                        partnerTeamDiv.innerHTML = '<span class="team-number">Partner</span>';
+                    }
+
+                    allianceList.appendChild(rankDiv);
+                    allianceList.appendChild(captainTeamDiv);
+                    allianceList.appendChild(partnerTeamDiv);
+                });
+            }
+
+            // Hàm để tạo và hiển thị danh sách các đội
+            function renderAllTeams() {
+                const teamsListContainer = document.getElementById('teams-list-container');
+                teamsListContainer.innerHTML = '';
+
+                // Lấy danh sách các đội đã được chọn, bị từ chối và không khả dụng để ẩn khỏi danh sách
+                const selectedTeamIDs = new Set();
+                allianceData.forEach(alliance => {
+                    if (alliance.captain) {
+                        selectedTeamIDs.add(alliance.captain.teamID);
+                    }
+                    if (alliance.partner) {
+                        selectedTeamIDs.add(alliance.partner.teamID);
+                    }
+                });
+
+                const teamsToShow = allTeamsData.filter(team =>
+                    !selectedTeamIDs.has(team.teamID) &&
+                    !team.isDeclined &&
+                    !team.isUnavailable
+                );
+
+                // Phân chia danh sách đội thành 2 cột
+                const columnCount = 2;
+                const totalTeams = teamsToShow.length;
+                const teamsPerColumn = Math.ceil(totalTeams / columnCount);
+
+                for (let i = 0; i < columnCount; i++) {
+                    const column = document.createElement('div');
+                    column.className = 'teams-list-column';
+
+                    const start = i * teamsPerColumn;
+                    const end = Math.min(start + teamsPerColumn, totalTeams);
+
+                    for (let j = start; j < end; j++) {
+                        const team = teamsToShow[j];
+                        const currentCaptain = allianceData[currentAllianceIndex]?.captain;
+
+                        const teamItem = document.createElement('div');
+                        teamItem.className = 'team-item';
+                        teamItem.dataset.teamId = team.teamID;
+
+                        const teamRankingInfo = document.createElement('div');
+                        teamRankingInfo.className = 'team-ranking-info';
+
+                        const teamRankNumber = document.createElement('span');
+                        teamRankNumber.className = 'team-rank-number';
+                        teamRankNumber.textContent = team.ranking;
+
+                        const teamInfo = document.createElement('div');
+                        teamInfo.className = 'team-info';
+
+                        const teamNumber = document.createElement('span');
+                        teamNumber.className = 'team-number';
+
+                        // Tách tên đội và tên trường
+                        const { teamNumber: num, teamName: name } = parseTeamID(team.teamID);
+                        teamNumber.textContent = num;
+
+                        const teamName = document.createElement('span');
+                        teamName.className = 'team-name';
+                        teamName.textContent = name;
+
+                        teamInfo.appendChild(teamNumber);
+                        teamInfo.appendChild(teamName);
+
+                        teamRankingInfo.appendChild(teamRankNumber);
+                        teamRankingInfo.appendChild(teamInfo);
+
+                        const teamButtons = document.createElement('div');
+                        teamButtons.className = 'team-buttons';
+
+                        const acceptButton = document.createElement('button');
+                        acceptButton.className = 'accept-button';
+                        acceptButton.textContent = 'Accept';
+                        acceptButton.dataset.teamId = team.teamID;
+                        acceptButton.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            selectPartner(team);
+                        });
+
+                        const declineButton = document.createElement('button');
+                        declineButton.className = 'decline-button';
+                        declineButton.textContent = 'Decline';
+                        declineButton.dataset.teamId = team.teamID;
+                        declineButton.addEventListener('click', (e) => {
+                             e.stopPropagation();
+                             handleDecline(team.teamID);
+                        });
+
+                        const unavailableButton = document.createElement('button');
+                        unavailableButton.className = 'unavailable-button';
+                        unavailableButton.textContent = 'Unavailable';
+                        unavailableButton.dataset.teamId = team.teamID;
+                        unavailableButton.addEventListener('click', (e) => {
+                             e.stopPropagation();
+                             handleUnavailable(team.teamID);
+                        });
+
+                        // Logic mới để hiển thị các nút
+                        if (currentCaptain && team.ranking > currentCaptain.ranking) {
+                            teamButtons.appendChild(acceptButton);
+                            teamButtons.appendChild(declineButton);
+                            teamButtons.classList.add('show-accept-decline');
+                        } else {
+                            teamButtons.appendChild(unavailableButton);
+                            teamButtons.classList.add('show-unavailable');
+                        }
+
+                        teamItem.appendChild(teamRankingInfo);
+                        teamItem.appendChild(teamButtons);
+
+                        column.appendChild(teamItem);
+                    }
+                    teamsListContainer.appendChild(column);
+                }
+            }
+
+            // Gửi dữ liệu liên minh đã cập nhật qua WebSocket
+            function emitAllianceUpdate() {
+                const cleanedAllianceData = allianceData.map(alliance => ({
+                    captain: alliance.captain ? { teamID: alliance.captain.teamID } : null,
+                    partner: alliance.partner ? { teamID: alliance.partner.teamID } : null
+                }));
+
+                socket.emit('update_alliance_selection', { alliances: cleanedAllianceData });
+            }
+
+            // Hàm xử lý khi một đội bị từ chối
+            function handleDecline(teamId) {
+                const team = allTeamsData.find(t => t.teamID === teamId);
+                if (team) {
+                    team.isDeclined = true;
+                }
+                // Chuyển sang đội trưởng tiếp theo nếu có
+                currentAllianceIndex++;
+                if (currentAllianceIndex < 8) {
+                    // Cập nhật đội trưởng tiếp theo
+                    setNextCaptain();
+                }
+                renderAlliances();
+                renderAllTeams();
+                emitAllianceUpdate(); // Gửi cập nhật đến màn hình hiển thị
+            }
+
+            // Hàm xử lý khi một đội bị đánh dấu là không khả dụng
+            function handleUnavailable(teamId) {
+                const team = allTeamsData.find(t => t.teamID === teamId);
+                if (team) {
+                    team.isUnavailable = true;
+                }
+                renderAlliances();
+                renderAllTeams();
+                emitAllianceUpdate(); // Gửi cập nhật đến màn hình hiển thị
+            }
+
+            // Hàm để chọn đối tác và tự động cập nhật đội trưởng tiếp theo
+            function selectPartner(team) {
+                if (currentAllianceIndex < 8) {
+                    allianceData[currentAllianceIndex].partner = team;
+                    currentAllianceIndex++;
+                    if (currentAllianceIndex < 8) {
+                        setNextCaptain();
+                    }
+                    renderAlliances();
+                    renderAllTeams();
+                    emitAllianceUpdate(); // Gửi cập nhật đến màn hình hiển thị
+                } else {
+                    console.log('Tất cả các liên minh đã chọn xong đối tác.');
+                }
+            }
+
+            // Hàm để tìm và gán đội trưởng tiếp theo
+            function setNextCaptain() {
+                const selectedTeamIDs = new Set();
+                allianceData.forEach(alliance => {
+                    if (alliance.captain) {
+                        selectedTeamIDs.add(alliance.captain.teamID);
+                    }
+                    if (alliance.partner) {
+                        selectedTeamIDs.add(alliance.partner.teamID);
+                    }
+                });
+
+                const teamsNotSelected = allTeamsData.filter(t =>
+                    !selectedTeamIDs.has(t.teamID) &&
+                    !t.isDeclined &&
+                    !t.isUnavailable
+                );
+
+                if (teamsNotSelected.length > 0) {
+                    const nextCaptain = teamsNotSelected.sort((a, b) => a.ranking - b.ranking)[0];
+                    allianceData[currentAllianceIndex] = {
+                        captain: nextCaptain,
+                        partner: null
+                    };
+                }
+            }
+
+            // Hàm để fetch dữ liệu từ server
+            async function fetchData() {
+                try {
+                    const response = await fetch('/get_all_rankings');
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    const data = await response.json();
+                    allTeamsData = data.map(team => ({...team, isDeclined: false, isUnavailable: false}));
+
+                    // Khởi tạo allianceData chỉ với đội đầu tiên làm đội trưởng liên minh 1
+                    allianceData = [
+                        {
+                            captain: allTeamsData[0],
+                            partner: null
+                        }
+                    ];
+
+                    // Khởi tạo 7 liên minh rỗng còn lại
+                    for (let i = 1; i < 8; i++) {
+                        allianceData.push({
+                            captain: null, // Ban đầu chưa có đội trưởng nào được hiển thị
+                            partner: null
+                        });
+                    }
+
+                    currentAllianceIndex = 0;
+
+                    renderAlliances();
+                    renderAllTeams();
+                    emitAllianceUpdate(); // Gửi cập nhật ban đầu đến màn hình hiển thị
+                } catch (error) {
+                    console.error('Error fetching data:', error);
+                }
+            }
+
+            // Lắng nghe sự kiện từ WebSocket để cập nhật bảng xếp hạng
+            socket.on('update_ranking', (data) => {
+                console.log('Received updated rankings:', data.ranking);
+                const newAllTeamsData = data.ranking;
+
+                allTeamsData = newAllTeamsData.map(team => {
+                    const existingTeam = allTeamsData.find(t => t.teamID === team.teamID);
+                    return {
+                        ...team,
+                        isDeclined: existingTeam ? existingTeam.isDeclined : false,
+                        isUnavailable: existingTeam ? existingTeam.isUnavailable : false
+                    };
+                });
+
+                const newAllianceData = [];
+                const selectedTeamIDs = new Set();
+                allianceData.forEach(alliance => {
+                    if (alliance.captain && alliance.partner) {
+                        newAllianceData.push(alliance);
+                        selectedTeamIDs.add(alliance.captain.teamID);
+                        selectedTeamIDs.add(alliance.partner.teamID);
+                    }
+                });
+
+                const teamsNotSelected = allTeamsData.filter(t =>
+                    !selectedTeamIDs.has(t.teamID) &&
+                    !t.isDeclined &&
+                    !t.isUnavailable
+                );
+
+                let nextCaptainIndex = 0;
+                if (newAllianceData.length < 8) {
+                    const nextCaptain = teamsNotSelected.sort((a, b) => a.ranking - b.ranking)[0];
+                    newAllianceData.push({
+                        captain: nextCaptain,
+                        partner: null
+                    });
+                    nextCaptainIndex = newAllianceData.length - 1;
+                }
+
+                while (newAllianceData.length < 8) {
+                    newAllianceData.push({
+                        captain: null,
+                        partner: null
+                    });
+                }
+
+                allianceData = newAllianceData;
+                currentAllianceIndex = nextCaptainIndex;
+
+                renderAlliances();
+                renderAllTeams();
+                emitAllianceUpdate(); // Gửi cập nhật đến màn hình hiển thị
+            });
+
+            // Gọi hàm để hiển thị dữ liệu ban đầu khi trang được tải
+            fetchData();
+        });
+    </script>
+</body>
+</html>

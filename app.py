@@ -1,172 +1,778 @@
-from flask import Flask, render_template, request, send_from_directory, jsonify
-from flask_socketio import SocketIO, emit
+from flask import Flask, render_template, request, jsonify
+from flask_socketio import SocketIO, emit, join_room, leave_room
 import time
+import os
 import threading
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import Boolean, Column, Integer, String, Float
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Cấu hình SQLAlchemy
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///tournament_data.db'
+basedir = os.path.abspath(os.path.dirname(__file__))
+db_path = os.path.join(basedir, 'database', 'tournament_data.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
 db = SQLAlchemy(app)
 
-countdown_interval = None
-time_left = 150
-current_match_index = 0
+with app.app_context():
+    db.create_all()
 
-STATICS_FOLDER = 'static'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'mp3'}
+stop_flags = {
+    'field-one': {"stop": False, "reset": False, "current_time": 150, "is_counting_down": False},
+    'field-two': {"stop": False, "reset": False, "current_time": 150, "is_counting_down": False}
+}
+current_match_datas = {
+    'field-one': {
+        'matchNumber': 'N/A',
+        'blueTeam1': 'Chưa có',
+        'blueTeam2': 'Đội',
+        'redTeam1': 'Chưa có',
+        'redTeam2': 'Đội'
+    },
+    'field-two': {
+        'matchNumber': 'N/A',
+        'blueTeam1': 'Chưa có',
+        'blueTeam2': 'Đội',
+        'redTeam1': 'Chưa có',
+        'redTeam2': 'Đội'
+    }
+}
 
-app.config['STATICS_FOLDER'] = STATICS_FOLDER
 
-def allowed_file(filename):
-    return '.' in filename and \
-        filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def countdown():
-    global time_left
-    while time_left > 0:
-        time.sleep(1)
-        time_left -= 1
-        socketio.emit('countdown', time_left)
-    global countdown_interval
-    countdown_interval = None
-    socketio.emit('countdown', time_left)
-
-class Match(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    match_number = db.Column(db.Integer)
-    red_team1 = db.Column(db.String(50))
-    red_team2 = db.Column(db.String(50))
-    blue_team1 = db.Column(db.String(50))
-    blue_team2 = db.Column(db.String(50))
-    red_total_score = db.Column(db.Integer)
-    blue_total_score = db.Column(db.Integer)
-    red_mission1 = db.Column(db.Integer)
-    red_mission2 = db.Column(db.Integer)
-    red_mission3 = db.Column(db.Integer)
-    red_fouls = db.Column(db.Integer)
-    blue_mission1 = db.Column(db.Integer)
-    blue_mission2 = db.Column(db.Integer)
-    blue_mission3 = db.Column(db.Integer)
-    blue_fouls = db.Column(db.Integer)
-
-    def __repr__(self):
-        return f"<Match {self.match_number}>"
-
-# Định nghĩa model Schedule
 class Schedule(db.Model):
-    __tablename__ = 'schedule'
     id = db.Column(db.Integer, primary_key=True)
-    match_number = db.Column(db.Integer)
-    red_team1 = db.Column(db.String(50))
-    red_team2 = db.Column(db.String(50))
-    blue_team1 = db.Column(db.String(50))
-    blue_team2 = db.Column(db.String(50))
+    matchNumber = db.Column(db.String(10))
+    blueTeam1 = db.Column(db.String(64))
+    blueTeam2 = db.Column(db.String(64))
+    redTeam1 = db.Column(db.String(64))
+    redTeam2 = db.Column(db.String(64))
+    field = db.Column(db.Integer)
+    round = db.Column(db.Integer)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'matchNumber': self.matchNumber,
+            'blueTeam1': self.blueTeam1,
+            'blueTeam2': self.blueTeam2,
+            'redTeam1': self.redTeam1,
+            'redTeam2': self.redTeam2,
+            'field': self.field,
+            'round': self.round
+        }
+
+
+class Temp(db.Model):
+    id = db.Column(Integer, primary_key=True)
+    matchNumber = db.Column(String(10), unique=True)
+    blueTeam1 = db.Column(String(64))
+    blueTeam2 = db.Column(String(64))
+    blueScore = db.Column(Float)
+    redScore = db.Column(Float)
+    redTeam1 = db.Column(String(64))
+    redTeam2 = db.Column(String(64))
+    scoreBlue1 = db.Column(Float)
+    scoreBlue2 = db.Column(Float)
+    scoreRed1 = db.Column(Float)
+    scoreRed2 = db.Column(Float)
+    GHBlue_Dirt = db.Column(Integer)
+    GHBlue_Seed = db.Column(Integer)
+    blueProductionPoints = db.Column(Integer)
+    GHRed_Dirt = db.Column(Integer)
+    GHRed_Seed = db.Column(Integer)
+    redProductionPoints = db.Column(Integer)
+    blueGarden = db.Column(Integer)
+    redGarden = db.Column(Integer)
+    blueHarvest = db.Column(Integer)
+    redHarvest = db.Column(Integer)
+    balanceCoefficient = db.Column(Float)
+    redBumperCrop = db.Column(Integer)
+    blueBumperCrop = db.Column(Integer)
+    blueFouls = db.Column(Integer)
+    redFouls = db.Column(Integer)
+    blueYellowCard = db.Column(Integer)
+    redYellowCard = db.Column(Integer)
+    blue1RedCard = db.Column(Boolean)
+    blue2RedCard = db.Column(Boolean)
+    red1RedCard = db.Column(Boolean)
+    red2RedCard = db.Column(Boolean)
 
     def __repr__(self):
-        return f'<Schedule {self.id}>'
+        return f"<Temp match {self.matchNumber}>"
 
-class Ranking(db.Model):
-    __tablename__ = 'ranking'  # Tên bảng trong database
+    def to_dict(self):
+        return {
+            'matchNumber': self.matchNumber,
+            'blueTeam1': self.blueTeam1,
+            'blueTeam2': self.blueTeam2,
+            'blueScore': self.blueScore,
+            'redScore': self.redScore,
+            'redTeam1': self.redTeam1,
+            'redTeam2': self.redTeam2,
+            'scoreBlue1': self.scoreBlue1,
+            'scoreBlue2': self.scoreBlue2,
+            'scoreRed1': self.scoreRed1,
+            'scoreRed2': self.scoreRed2,
+            'GHBlue_Dirt': self.GHBlue_Dirt,
+            'GHBlue_Seed': self.GHBlue_Seed,
+            'blueProductionPoints': self.blueProductionPoints,
+            'GHRed_Dirt': self.GHRed_Dirt,
+            'GHRed_Seed': self.GHRed_Seed,
+            'redProductionPoints': self.redProductionPoints,
+            'blueGarden': self.blueGarden,
+            'redGarden': self.redGarden,
+            'blueHarvest': self.blueHarvest,
+            'redHarvest': self.redHarvest,
+            'balanceCoefficient': self.balanceCoefficient,
+            'redBumperCrop': self.redBumperCrop,
+            'blueBumperCrop': self.blueBumperCrop,
+            'blueFouls': self.blueFouls,
+            'redFouls': self.redFouls,
+            'blueYellowCard': self.blueYellowCard,
+            'redYellowCard': self.redYellowCard,
+            'blue1RedCard': self.blue1RedCard,
+            'blue2RedCard': self.blue2RedCard,
+            'red1RedCard': self.red1RedCard,
+            'red2RedCard': self.red2RedCard,
+        }
 
-    id = db.Column(db.Integer, primary_key=True)
-    teamscore = db.Column(db.Integer)
-    score_mission1 = db.Column(db.Integer)
-    score_mission2 = db.Column(db.Integer)
-    score_mission3 = db.Column(db.Integer)
-    team_name = db.Column(db.String(50))
+
+class QualificationRanking(db.Model):
+    __tablename__ = "qualificationRanking"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     ranking = db.Column(db.Integer)
+    teamID = db.Column(db.String(10))
+    teamName = db.Column(db.String(64))
+    totalMatchScore = db.Column(db.Float)
+    highest1 = db.Column(db.Float)
+    highest2 = db.Column(db.Float)
+    totalHarvestScore = db.Column(db.Integer)
+    matchesPlayed = db.Column(db.Integer)
 
-    def __repr__(self):
-        return f"<Ranking {self.team_name}>"
+# ====================================================================
+# NEW: Thêm mô hình cơ sở dữ liệu cho các liên minh đã chọn
+# ====================================================================
+class Alliance(db.Model):
+    __tablename__ = 'Alliance'  # Thêm dòng này để chỉ định tên bảng chính xác
+    id = Column(Integer, primary_key=True)
+    alliance_number = Column(Integer, nullable=False, unique=True)
+    captain_teamID = Column(String(50), nullable=False)
+    partner_teamID = Column(String(50), nullable=True)
 
+    def to_dict(self):
+        return {
+            'alliance_number': self.alliance_number,
+            'captain_teamID': self.captain_teamID,
+            'partner_teamID': self.partner_teamID
+        }
+# ====================================================================
 
+def calculate_and_update_ranking():
+    matches = Temp.query.all()
+    team_stats = {}
 
-@app.route('/save_match', methods=['POST'])
-def save_match():
-    data = request.get_json()  # Lấy dữ liệu JSON từ request
-    new_match = Match(         # Tạo một instance mới của Model Match
-        match_number=data['matchNumber'],
-        red_team1=data['redTeam1'],
-        red_team2=data['redTeam2'],
-        blue_team1=data['blueTeam1'],
-        blue_team2=data['blueTeam2'],
-        red_total_score=data['redTotalScore'],
-        blue_total_score=data['blueTotalScore'],
-        red_mission1=data['redMission1'],
-        red_mission2=data['redMission2'],
-        red_mission3=data['redMission3'],
-        red_fouls=data['redFoulsPoint'],
-        blue_mission1=data['blueMission1'],
-        blue_mission2=data['blueMission2'],
-        blue_mission3=data['blueMission3'],
-        blue_fouls=data['blueFoulsPoint']
-    )
-    db.session.add(new_match)  # Thêm instance vào session
-    db.session.commit()       # Lưu các thay đổi vào cơ sở dữ liệu
-    return jsonify({'message': 'Match data saved successfully!'}), 200  # Trả về JSON
+    for match in matches:
+        for team, score, harvest in [
+            (match.blueTeam1, match.scoreBlue1, match.blueHarvest),
+            (match.blueTeam2, match.scoreBlue2, match.blueHarvest),
+            (match.redTeam1, match.scoreRed1, match.redHarvest),
+            (match.redTeam2, match.scoreRed2, match.redHarvest)
+        ]:
+            if not team:
+                continue
+
+            if team not in team_stats:
+                team_stats[team] = {
+                    "scores": [],
+                    "harvest": 0,
+                    "matches": 0
+                }
+
+            team_stats[team]["scores"].append(score or 0)
+            team_stats[team]["harvest"] += harvest or 0
+            team_stats[team]["matches"] += 1
+
+    ranking_data = []
+    for team, stat in team_stats.items():
+        sorted_scores = sorted(stat["scores"], reverse=True)
+        if len(sorted_scores) >= 5:
+            total_score = sum(sorted_scores) - min(sorted_scores)
+        else:
+            total_score = sum(sorted_scores)
+        highest1 = sorted_scores[0] if len(sorted_scores) >= 1 else 0
+        highest2 = sorted_scores[1] if len(sorted_scores) >= 2 else 0
+
+        ranking_data.append({
+            "teamID": team,
+            "teamName": team,
+            "totalMatchScore": total_score,
+            "highest1": highest1,
+            "highest2": highest2,
+            "totalHarvestScore": stat["harvest"],
+            "matchesPlayed": stat["matches"]
+        })
+
+    ranking_data.sort(key=lambda x: (
+        -x["totalMatchScore"],
+        -x["highest1"],
+        -x["highest2"],
+        -x["totalHarvestScore"],
+        x["teamName"]
+    ))
+
+    QualificationRanking.query.delete()
+    db.session.commit()
+
+    for idx, team in enumerate(ranking_data, 1):
+        db.session.add(QualificationRanking(
+            ranking=idx,
+            teamID=team["teamID"],
+            teamName=team["teamName"],
+            totalMatchScore=team["totalMatchScore"],
+            highest1=team["highest1"],
+            highest2=team["highest2"],
+            totalHarvestScore=team["totalHarvestScore"],
+            matchesPlayed=team["matchesPlayed"]
+        ))
+
+    db.session.commit()
+    socketio.emit("update_ranking", {"ranking": ranking_data})
+
+@app.route('/save_temp', methods=['POST'])
+def save_temp():
+    data = request.json
+    print("Received data from client (save_temp):", data)  # Debugging log
+    match_number = data.get('matchNumber')
+    if match_number is None:
+        print("Error: Missing matchNumber in save_temp request.")  # Debugging log
+        return jsonify({"success": False, "message": "Missing matchNumber"}), 400
+    with app.app_context():
+        match = Temp.query.filter_by(matchNumber=match_number).first()
+
+        if not match:
+            match = Temp(matchNumber=match_number)
+            db.session.add(match)
+
+        # Cập nhật các trường từ dữ liệu nhận được
+        match.blueTeam1 = data.get('blueTeam1')
+        match.blueTeam2 = data.get('blueTeam2')
+        match.redTeam1 = data.get('redTeam1')
+        match.redTeam2 = data.get('redTeam2')
+
+        match.blueScore = data.get('blueScore')
+        match.redScore = data.get('redScore')
+        match.scoreBlue1 = data.get('scoreBlue1')
+        match.scoreBlue2 = data.get('scoreBlue2')
+        match.scoreRed1 = data.get('scoreRed1')
+        match.scoreRed2 = data.get('scoreRed2')
+
+        match.GHBlue_Dirt = data.get('GHBlue_Dirt')
+        match.GHBlue_Seed = data.get('GHBlue_Seed')
+        match.blueProductionPoints = data.get('blueProductionPoints')
+        match.GHRed_Dirt = data.get('GHRed_Dirt')
+        match.GHRed_Seed = data.get('GHRed_Seed')
+        match.redProductionPoints = data.get('redProductionPoints')
+
+        match.blueGarden = data.get('blueGarden')
+        match.redGarden = data.get('redGarden')
+        match.blueHarvest = data.get('blueHarvest')
+        match.redHarvest = data.get('redHarvest')
+        match.balanceCoefficient = data.get('balanceCoefficient')
+
+        match.redBumperCrop = data.get('redBumperCrop')
+        match.blueBumperCrop = data.get('blueBumperCrop')
+
+        match.blueFouls = data.get('blueFouls')
+        match.redFouls = data.get('redFouls')
+        match.blueYellowCard = data.get('blueYellowCard')
+        match.redYellowCard = data.get('redYellowCard')
+
+        match.blue1RedCard = bool(data.get('blue1RedCard'))
+        match.blue2RedCard = bool(data.get('blue2RedCard'))
+        match.red1RedCard = bool(data.get('red1RedCard'))
+        match.red2RedCard = bool(data.get('red2RedCard'))
+
+        db.session.commit()
+        print(f"Match {match_number} saved/updated successfully in Temp table.")  # Debugging log
+        calculate_and_update_ranking()
+        return jsonify({"message": "Score saved to temp successfully!", "success": True}), 200  # Added success: True
+
 
 @app.route('/')
 def index():
-    return render_template('match_control.html')
+    return match_control_field('field-one')
 
-@app.route('/countdown')
-def countdown_page():
-    return render_template('countdownscreen.html')
+@app.route('/match-control/<field_id>')
+def match_control_field(field_id):
+    with app.app_context():
+        all_matches = Schedule.query.order_by(Schedule.id.asc()).all()
+        if not all_matches:
+            return "Không có trận đấu nào trong cơ sở dữ liệu."
+
+        match_list = []
+        for m in all_matches:
+            try:
+                match_num = int(m.matchNumber[1:])  # loại bỏ 'Q' nếu có
+                if field_id == "field-one" and match_num % 2 == 1:  # Trận lẻ cho field-one
+                    match_list.append(m)
+                elif field_id == "field-two" and match_num % 2 == 0:  # Trận chẵn cho field-two
+                    match_list.append(m)
+            except ValueError:
+                # Bỏ qua các matchNumber không đúng định dạng 'QXX'
+                continue
+
+        if not match_list:
+            return f"Không có trận {'lẻ' if field_id == 'field-one' else 'chẵn'} nào trong cơ sở dữ liệu cho trường này."
+
+        first_match_for_field = match_list[0]
+        match_dicts = [m.to_dict() for m in match_list]
+
+        # Cập nhật current_match_data cho trường cụ thể
+        current_match_datas[field_id] = first_match_for_field.to_dict()
+
+    return render_template('match_control.html',
+                           match=first_match_for_field,
+                           all_matches=match_dicts,
+                           field_id=field_id,
+                           field_number=1 if field_id == "field-one" else 2)
+
+
+@app.route('/countdown/<field_id>')
+def countdown_field(field_id):
+    with app.app_context():
+        # Lấy dữ liệu trận đấu hiện tại cho trường cụ thể
+        current_match_data = current_match_datas.get(field_id)
+        if current_match_data is None:
+            # Khởi tạo nếu chưa có dữ liệu cho trường này
+            first_match = Schedule.query.order_by(Schedule.id.asc()).first()
+            if first_match:
+                current_match_data = first_match.to_dict()
+            else:
+                current_match_data = {
+                    'matchNumber': 'N/A',
+                    'blueTeam1': 'Chưa có',
+                    'blueTeam2': 'Đội',
+                    'redTeam1': 'Chưa có',
+                    'redTeam2': 'Đội'
+                }
+            current_match_datas[field_id] = current_match_data  # Lưu lại vào dictionary
+
+    return render_template('field_display.html', field_id=field_id)
+
+
+@app.route('/rankings')
+def ranking_screen():
+    return render_template('ranking_screen.html')
+
+@app.route('/alliance_selection')
+def alliance_selection_screen():
+    return render_template('alliance_selection.html')
+
+@app.route('/alliance_selection_control')
+def alliance_selection_control():
+    return render_template('alliance_selection_control.html')
+
+
+# ====================================================================
+# NEW: Endpoint để lấy dữ liệu liên minh đã chọn
+# ====================================================================
+@app.route('/get_alliance_selection', methods=['GET'])
+def get_alliance_selection():
+    alliances = Alliance.query.order_by(Alliance.alliance_number.asc()).all()
+    return jsonify([a.to_dict() for a in alliances])
+
+
+# ====================================================================
+
+
+# ====================================================================
+# NEW: Thêm xử lý WebSocket cho việc chọn liên minh
+# ====================================================================
+@socketio.on('update_alliance_selection')
+def handle_alliance_selection(data):
+    global alliance_selection_data
+    print("Received new alliance selection data")
+
+    alliances = data.get('alliances', [])
+    if not alliances:
+        print("Error: 'alliances' data not provided.")
+        return
+
+    # In toàn bộ dữ liệu nhận được để debug nếu có lỗi
+    print("Alliance data nhận được:", alliances)
+
+    alliance_selection_data = alliances
+
+    with app.app_context():
+        # Xóa dữ liệu cũ
+        Alliance.query.delete()
+        db.session.commit()
+
+        # Thêm dữ liệu mới vào bảng
+        for idx, alliance_dict in enumerate(alliances):
+            captain_obj = alliance_dict.get('captain')
+            partner_obj = alliance_dict.get('partner')
+
+            # Kiểm tra captain có hợp lệ không
+            if not captain_obj or not isinstance(captain_obj, dict) or 'teamID' not in captain_obj:
+                print(f"Bỏ qua liên minh #{idx + 1} vì thiếu captain hợp lệ: {captain_obj}")
+                continue
+
+            captain_teamID = captain_obj['teamID']
+            partner_teamID = partner_obj['teamID'] if partner_obj and isinstance(partner_obj, dict) and 'teamID' in partner_obj else None
+
+            new_alliance = Alliance(
+                alliance_number=idx + 1,
+                captain_teamID=captain_teamID,
+                partner_teamID=partner_teamID
+            )
+            db.session.add(new_alliance)
+
+        db.session.commit()
+
+        formatted_alliances = []
+        for a in alliances:
+            formatted_alliances.append({
+                'captain_teamID': a.get('captain', {}).get('teamID') if a.get('captain') else None,
+                'partner_teamID': a.get('partner', {}).get('teamID') if a.get('partner') else None
+            })
+
+        emit('alliance_selection_updated', {'alliances': formatted_alliances}, broadcast=True)
+        print("Đã emit alliance_selection_updated:", formatted_alliances)
+
+# ====================================================================
+@app.route('/get_ranking_data')
+def get_ranking_data():
+    with app.app_context():
+        rankings = QualificationRanking.query.order_by(QualificationRanking.ranking.asc()).all()
+        result = []
+        for team in rankings:
+            result.append({
+                "ranking": team.ranking,
+                "teamID": team.teamID,
+                "teamName": team.teamName,
+                "totalMatchScore": team.totalMatchScore,
+                "highest1": team.highest1,
+                "highest2": team.highest2,
+                "totalHarvestScore": team.totalHarvestScore,
+                "matchesPlayed": team.matchesPlayed
+            })
+        return jsonify(result)
+# ==================================================================================================
+# NEW: Endpoint để lấy tất cả dữ liệu xếp hạng
+# ==================================================================================================
+@app.route('/get_all_rankings')
+def get_all_rankings():
+    with app.app_context():
+        rankings = QualificationRanking.query.order_by(QualificationRanking.ranking.asc()).all()
+        ranking_list = []
+        for r in rankings:
+            ranking_list.append({
+                "ranking": r.ranking,
+                "teamID": r.teamID,
+                "teamName": r.teamName,
+                "totalMatchScore": r.totalMatchScore,
+                "highest1": r.highest1,
+                "highest2": r.highest2,
+                "totalHarvestScore": r.totalHarvestScore,
+                "matchesPlayed": r.matchesPlayed
+            })
+        return jsonify(ranking_list)
+# ==================================================================================================
+# Endpoint mới để hiển thị lịch thi đấu sử dụng template
+# ==================================================================================================
+@app.route('/schedule')
+def show_schedule():
+    return render_template('schedule.html')
+
+# ==================================================================================================
+# Endpoint để cung cấp dữ liệu lịch thi đấu dưới dạng JSON
+# ==================================================================================================
+@app.route('/get_schedule_data')
+def get_schedule_data():
+    with app.app_context():
+        # Truy vấn tất cả các bản ghi từ bảng Schedule và sắp xếp theo id
+        schedule = Schedule.query.order_by(Schedule.id.asc()).all()
+        # Chuyển đổi danh sách các object thành danh sách các dictionary
+        result = [match.to_dict() for match in schedule]
+        return jsonify(result)
+
+@app.route('/get_match_score_content')
+def get_match_score_content():
+    return render_template('match_score.html')
+
 
 @socketio.on('connect')
 def handle_connect():
-    print('Client connected:', request.sid)
-    emit('countdown', time_left)
-    send_schedule_data()
+    print(f"Client connected: {request.sid}")
 
-@socketio.on('start-countdown')
-def handle_start_countdown():
-    global countdown_interval, time_left
-    if countdown_interval is None:
-        time_left = 153
-        countdown_interval = threading.Thread(target=countdown)
-        countdown_interval.start()
 
-@socketio.on('get_match_data')  # Đổi tên event
-def handle_get_match_data():  # Đổi tên hàm
-    """Xử lý sự kiện 'get_match_data' từ client và gửi dữ liệu trận đấu."""
-    send_schedule_data()
+@socketio.on('join_room')
+def on_join(data):
+    field_id = data.get('field_id')
+    if field_id:
+        join_room(field_id)
+        print(f"Client {request.sid} joined room: {field_id}")
+        # Gửi dữ liệu ban đầu chỉ đến client vừa kết nối
+        with app.app_context():
+            current_match_data_for_field = current_match_datas.get(field_id)
+            if current_match_data_for_field:
+                emit('update_teams_display', {
+                    'blueTeam1': current_match_data_for_field['blueTeam1'],
+                    'blueTeam2': current_match_data_for_field['blueTeam2'],
+                    'redTeam1': current_match_data_for_field['redTeam1'],
+                    'redTeam2': current_match_data_for_field['redTeam2'],
+                    'matchNumber': current_match_data_for_field['matchNumber'],
+                    'field_id': field_id
+                }, room=request.sid)  # Gửi chỉ đến client hiện tại
+            emit('timer_update', {
+                'time': f"{stop_flags[field_id]['current_time'] // 60:02}:{stop_flags[field_id]['current_time'] % 60:02}",
+                'field_id': field_id
+            }, room=request.sid)  # Gửi chỉ đến client hiện tại
+    else:
+        print(f"Client {request.sid} tried to join room without field_id.")
 
-def send_schedule_data():
-    """Lấy dữ liệu trận đấu từ bảng schedule và gửi cho client."""
-    global current_match_index
-    try:
-        # Lấy tất cả các trận đấu từ bảng schedule, sắp xếp theo match_number
-        all_schedules = Schedule.query.order_by(Schedule.match_number).all()
-        # In ra số lượng trận đấu lấy được
-        print(f"Số lượng trận đấu lấy từ bảng schedule: {len(all_schedules)}")
-        if all_schedules:
-            # Chuyển đổi các đối tượng Schedule thành list các dictionary
-            schedule_list = []
-            for schedule in all_schedules:
-                schedule_list.append({
-                    'id': schedule.id,
-                    'match_number': schedule.match_number,
-                    'red_team1': schedule.red_team1,
-                    'red_team2': schedule.red_team2,
-                    'blue_team1': schedule.blue_team1,
-                    'blue_team2': schedule.blue_team2
-                })
-            socketio.emit('send_match_data', {'data': schedule_list})
+# ====================================================================
+# NEW: Endpoint để tạo các trận playoff dựa trên danh sách mới
+# ====================================================================
+@socketio.on('generate_playoff_matches')
+def handle_generate_playoff_matches():
+    print("Received request to generate playoff matches.")
+    with app.app_context():
+        # Lấy tất cả các liên minh đã được lưu trữ trong cơ sở dữ liệu, sắp xếp theo số liên minh
+        alliances = Alliance.query.order_by(Alliance.alliance_number.asc()).all()
+
+        if len(alliances) != 8:
+            print(f"Error: Expected 8 alliances, but found {len(alliances)}. Cannot generate matches.")
+            emit('match_generation_status', {'success': False, 'message': 'Cần có 8 liên minh để tạo trận đấu.'})
+            return
+
+        # Ánh xạ các liên minh theo số liên minh để dễ dàng truy cập
+        alliance_map = {alliance.alliance_number: alliance for alliance in alliances}
+
+        # Định nghĩa 16 cặp đấu chính xác như danh sách bạn đã cung cấp
+        match_configs = [
+            (1, 2, 'Playoff Match 01'), # Blue Alliance 1 vs Red Alliance 2
+            (3, 4, 'Playoff Match 02'), # Blue Alliance 3 vs Red Alliance 4
+            (5, 6, 'Playoff Match 03'), # Blue Alliance 5 vs Red Alliance 6
+            (7, 8, 'Playoff Match 04'), # Blue Alliance 7 vs Red Alliance 8
+            (1, 5, 'Playoff Match 05'),
+            (2, 6, 'Playoff Match 06'),
+            (3, 7, 'Playoff Match 07'),
+            (4, 8, 'Playoff Match 08'),
+            (1, 3, 'Playoff Match 09'),
+            (2, 4, 'Playoff Match 10'),
+            (5, 7, 'Playoff Match 11'),
+            (6, 8, 'Playoff Match 12'),
+            (1, 8, 'Playoff Match 13'),
+            (2, 7, 'Playoff Match 14'),
+            (3, 6, 'Playoff Match 15'),
+            (4, 5, 'Playoff Match 16'),
+        ]
+
+        # Xóa các trận đấu playoff cũ nếu có trước khi tạo mới
+        Schedule.query.filter(Schedule.matchNumber.like('Playoff%')).delete()
+        db.session.commit()
+
+        # Tạo và lưu 16 trận đấu mới vào database
+        for alliance_blue_num, alliance_red_num, match_name in match_configs:
+            blue_alliance = alliance_map.get(alliance_blue_num)
+            red_alliance = alliance_map.get(alliance_red_num)
+
+            if blue_alliance and red_alliance:
+                new_match = Schedule(
+                    matchNumber=match_name,
+                    blueTeam1=blue_alliance.captain_teamID,
+                    blueTeam2=blue_alliance.partner_teamID,
+                    redTeam1=red_alliance.captain_teamID,
+                    redTeam2=red_alliance.partner_teamID,
+                    round=1, # Tất cả đều là vòng đầu tiên
+                    field=1  # Gán mặc định vào field 1
+                )
+                db.session.add(new_match)
+                print(f"Created match: {match_name} (Blue: Alliance {alliance_blue_num}, Red: Alliance {alliance_red_num})")
+            else:
+                print(f"Warning: Alliance not found for match {match_name}.")
+
+        db.session.commit()
+        print("16 playoff matches generated and saved successfully.")
+        emit('match_generation_status', {'success': True, 'message': 'Đã tạo 16 trận đấu playoff thành công!'})
+# ====================================================================
+
+@socketio.on('start_match')
+def handle_start_match(data):
+    field_id = data.get('field_id')
+    if field_id not in stop_flags:
+        print(f"Error: Invalid field_id '{field_id}' for start_match.")
+        return
+
+    stop_flag = stop_flags[field_id]
+    stop_flag["stop"] = False
+    stop_flag["reset"] = False
+    stop_flag["current_time"] = 150
+    stop_flag["is_counting_down"] = True  # Đặt là True khi bắt đầu đếm ngược
+
+    def countdown_and_start():
+        for i in range(3, 0, -1):
+            if stop_flag["stop"]:
+                stop_flag["is_counting_down"] = False  # Đặt là False nếu dừng thủ công
+                return
+            socketio.emit('countdown', {'value': i, 'field_id': field_id}, room=field_id)
+            time.sleep(1)
+        socketio.emit('countdown', {'value': 'GO', 'field_id': field_id}, room=field_id)
+
+        while stop_flag["current_time"] >= 0:
+            if stop_flag["stop"]:
+                stop_flag["is_counting_down"] = False  # Đặt là False nếu dừng thủ công
+                return
+            minutes = stop_flag["current_time"] // 60
+            seconds = stop_flag["current_time"] % 60
+            timer_str = f"{minutes:02}:{seconds:02}"
+            socketio.emit('timer_update', {'time': timer_str, 'field_id': field_id}, room=field_id)
+            time.sleep(1)
+            stop_flag["current_time"] -= 1
+
+        # Khi đếm ngược kết thúc, đặt lại cờ
+        stop_flag["is_counting_down"] = False  # Đặt là False khi đếm ngược kết thúc
+        if not stop_flag["reset"]:
+            socketio.emit('timer_finished', {'field_id': field_id})
+            print(f"Countdown for {field_id} finished.")
+        stop_flag["stop"] = True  # Đảm bảo dừng lại sau khi kết thúc
+
+    threading.Thread(target=countdown_and_start).start()
+
+
+@socketio.on('stop_match')
+def handle_stop_match(data):
+    field_id = data.get('field_id')
+    if field_id not in stop_flags:
+        print(f"Error: Invalid field_id '{field_id}' for stop_match.")
+        return
+    stop_flags[field_id]["stop"] = True
+    stop_flags[field_id]["is_counting_down"] = False  # Đặt là False nếu dừng thủ công
+
+
+@socketio.on('reset_match')
+def handle_reset(data):
+    field_id = data.get('field_id')
+    if field_id not in stop_flags:
+        print(f"Error: Invalid field_id '{field_id}' for reset_match.")
+        return
+    stop_flags[field_id]["stop"] = True
+    stop_flags[field_id]["current_time"] = 150
+    stop_flags[field_id]["is_counting_down"] = False  # Đặt là False khi reset
+    socketio.emit('timer_update', {'time': "02:30", 'field_id': field_id}, room=field_id)
+    socketio.emit('reset_done', {'field_id': field_id}, room=field_id)
+
+
+@socketio.on('change_match')
+def handle_change_match(data):
+    field_id = data.get('field_id')
+    match_number = data['matchNumber']
+    if field_id not in current_match_datas:
+        print(f"Error: Invalid field_id '{field_id}' for change_match.")
+        return
+
+    with app.app_context():
+        match = Schedule.query.filter_by(matchNumber=match_number).first()
+        if match:
+            current_match_datas[field_id] = match.to_dict()
+            # CHỈ đẩy dữ liệu nếu countdown KHÔNG hoạt động
+            if not stop_flags[field_id]["is_counting_down"]:
+                print(f"Updating display for {field_id} with match {match_number} (countdown not active)")
+                socketio.emit('update_teams_display', {
+                    'blueTeam1': match.blueTeam1,
+                    'blueTeam2': match.blueTeam2,
+                    'redTeam1': match.redTeam1,
+                    'redTeam2': match.redTeam2,
+                    'matchNumber': match.matchNumber,
+                    'field_id': field_id
+                }, room=field_id)
+            else:
+                print(f"Countdown active for {field_id}. Not updating display for match {match_number}.")
+
+
+@socketio.on('request_initial_match_data')
+def handle_request_initial_match_data(data):
+    # Lệnh này không còn cần thiết vì on_join đã gửi dữ liệu ban đầu
+    pass
+
+
+@socketio.on('show_score_request')
+def handle_show_score_request(data):
+    print("Received show_score_request:", data)  # Debugging log
+    match_number_to_show = data.get('matchNumber')
+    field_id = data.get('field_id')
+
+    print(f"show_score_request - match_number: {match_number_to_show}, field_id: {field_id}")  # Debugging log
+
+    if not match_number_to_show or not field_id:
+        print("Error: matchNumber or field_id not provided in show_score_request.")  # Debugging log
+        emit('error_message', {'message': 'Không tìm thấy số trận đấu hoặc ID trường để hiển thị điểm.'})
+        return
+    if field_id not in current_match_datas:
+        print(f"Error: Invalid field_id '{field_id}' for show_score_request.")  # Debugging log
+        return
+
+    with app.app_context():
+        score_data = Temp.query.filter_by(matchNumber=match_number_to_show).first()
+        if score_data:
+            print(f"Found score data for match {match_number_to_show} in Temp table.")  # Debugging log
+            full_data = score_data.to_dict()
+            schedule_match = Schedule.query.filter_by(matchNumber=match_number_to_show).first()
+            if schedule_match:
+                full_data['blueTeam1'] = schedule_match.blueTeam1
+                full_data['blueTeam2'] = schedule_match.blueTeam2
+                full_data['redTeam1'] = schedule_match.redTeam1
+                full_data['redTeam2'] = schedule_match.redTeam2
+
+            # THÊM field_id VÀO full_data TRƯỚC KHI GỬI
+            full_data['field_id'] = field_id
+
+            socketio.emit('show_score_data', full_data, room=field_id)
+            print(f"Emitted show_score_data for match {match_number_to_show} to field {field_id}")  # Debugging log
         else:
-            socketio.emit('send_match_data', {'data': []})
-    except Exception as e:
-        print(f"Lỗi khi truy vấn database: {e}")
-        socketio.emit('send_match_data', {'data': []})
+            print(
+                f"No score data found for match {match_number_to_show} in Temp table for field {field_id}. Emitting error message.")  # Debugging log
+            socketio.emit('error_message',
+                          {'message': f"Không tìm thấy điểm số cho trận {match_number_to_show}.", 'field_id': field_id},
+                          room=field_id)  # Added field_id to error message
 
-@app.route('/uploads/<filename>')
-def uploaded_file(filename):
-    return send_from_directory(app.config['STATICS_FOLDER'], filename)
+
+@socketio.on('hide_score_request')
+def handle_hide_score_request(data):
+    field_id = data.get('field_id')
+    if not field_id:
+        print("Error: field_id not provided in hide_score_request.")
+        return
+    if field_id not in current_match_datas:
+        print(f"Error: Invalid field_id '{field_id}' for hide_score_request.")
+        return
+
+    print(f"Received hide_score_request for field {field_id}.")
+    socketio.emit('hide_score_data', {'field_id': field_id}, room=field_id)
+
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True, host='10.30.44.130',port=5000, allow_unsafe_werkzeug=True)
+    with app.app_context():
+        # Khởi tạo current_match_datas cho cả hai trường khi ứng dụng bắt đầu
+        first_match_on_startup = Schedule.query.order_by(Schedule.id.asc()).first()
+        if first_match_on_startup:
+            # Gán cùng một trận đầu tiên cho cả hai trường nếu không có dữ liệu cụ thể
+            current_match_datas['field-one'] = first_match_on_startup.to_dict()
+            current_match_datas['field-two'] = first_match_on_startup.to_dict()
+        else:
+            # Khởi tạo mặc định nếu không có trận đấu nào
+            default_data = {
+                'matchNumber': 'N/A',
+                'blueTeam1': 'Chưa có',
+                'blueTeam2': 'Đội',
+                'redTeam1': 'Chưa có',
+                'redTeam2': 'Đội'
+            }
+            current_match_datas['field-one'] = default_data
+            current_match_datas['field-two'] = default_data
 
+    socketio.run(app, debug=True, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)

@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alliance Selection Display</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        /* General body settings */
+        body {
+            font-family: sans-serif;
+            background-color: #000d23;
+            background-image: linear-gradient(#0056a3, #00050a);
+            color: white;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            text-transform: uppercase;
+        }
+
+        /* Main container including panels */
+        .display-container {
+            display: flex;
+            padding: 20px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* Main panel for selected alliances using CSS Grid */
+        .main-panel {
+            flex-basis: 35%;
+            display: flex;
+            flex-direction: column;
+            margin-right: 50px;
+        }
+
+        .header {
+            display: grid;
+            grid-template-columns: 40px 1fr 1fr; /* Rank | Captain | Partner */
+            grid-gap: 5px; /* Spacing between columns */
+            margin-bottom: 10px;
+            padding-left: 10px;
+        }
+
+        .header-captain, .header-partner {
+            font-size: 1.5em;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .alliances-grid {
+            display: grid;
+            grid-template-columns: 40px 1fr 1fr; /* Rank | Captain | Partner */
+            grid-gap: 5px; /* Consistent spacing */
+        }
+
+        .alliance-slot {
+            display: contents; /* Allows children to participate in the grid layout */
+        }
+
+        .rank {
+            background-color: #00224d;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px 0 0 4px;
+            height: 50px; /* Tăng chiều cao lên 50px */
+            box-sizing: border-box;
+        }
+
+        .team-slot {
+            background-color: #00224d;
+            border: 1px solid #4d4d4d;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 5px 10px;
+            font-size: 1.2em;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+            height: 50px; /* Tăng chiều cao lên 50px */
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        .team-slot.captain-team {
+            background-color: #ff9933; /* Màu cam cho đội trưởng */
+        }
+
+        .team-slot.partner-team {
+            background-color: #2ecc71; /* Màu xanh lá cho đối tác */
+        }
+
+        .team-slot.captain-team.placeholder,
+        .team-slot.partner-team.placeholder {
+            background-color: #00224d;
+        }
+
+        .team-slot.captain-team {
+            border-right: none;
+            border-radius: 0;
+        }
+
+        .team-slot.partner-team {
+            border-left: none;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .team-slot .team-id-number {
+            font-size: 1em; /* Tăng kích thước font số đội */
+            font-weight: bold;
+            white-space: nowrap;
+        }
+
+        .team-slot .team-id-name {
+            font-size: 0.8em; /* Tăng kích thước font tên đội */
+            font-weight: normal;
+            white-space: normal;
+            margin-left: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Frame displaying the list of remaining teams */
+        .available-teams-panel {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column; /* Đổi thành column để title và list nằm trên cùng một cột */
+            justify-content: space-between;
+        }
+
+        .teams-list-container {
+            display: flex;
+            flex-grow: 1;
+            gap: 15px;
+            overflow-y: auto;
+            max-height: calc(100vh - 40px);
+        }
+
+        .teams-list-column {
+            display: flex;
+            flex-direction: column;
+            flex-basis: 33%;
+            gap: 5px;
+        }
+
+        .teams-list-column:last-child {
+            margin-right: 0;
+        }
+
+        .team-item {
+            display: flex;
+            background-color: #f0f2f5;
+            border: 1px solid #333;
+            color: black;
+            height: 50px; /* Tăng chiều cao lên 50px */
+            align-items: center;
+            box-sizing: border-box;
+            border-radius: 4px;
+        }
+
+        .team-item.unavailable {
+            background-color: #4d4d4d;
+            color: #bdbdbd;
+        }
+
+        .team-rank {
+            background-color: #ffd700;
+            color: black;
+            padding: 5px;
+            font-weight: bold;
+            min-width: 40px;
+            text-align: center;
+            border-right: 1px solid #333;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            border-radius: 4px 0 0 4px;
+        }
+
+        .team-item .team-id {
+            padding: 5px 10px;
+            font-weight: bold;
+            flex-grow: 1;
+            color: black;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            align-items: flex-start;
+            box-sizing: border-box;
+        }
+
+        .team-item .team-id-number {
+            font-size: 1.4em; /* Tăng kích thước font số đội */
+            font-weight: bold;
+            white-space: nowrap;
+        }
+
+        .team-item .team-id-name {
+            font-size: 0.9em; /* Tăng kích thước font tên đội */
+            color: #333;
+            white-space: normal;
+            margin-left: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="display-container">
+        <div class="main-panel">
+            <div class="header">
+                <div class="header-placeholder"></div>
+                <div class="header-captain">Đội trưởng</div>
+                <div class="header-partner">Đội thành viên</div>
+            </div>
+            <div id="alliances-container" class="alliances-grid"></div>
+        </div>
+
+        <div class="available-teams-panel">
+            <div id="teams-list-container" class="teams-list-container">
+                <div id="teams-list-column-1" class="teams-list-column"></div>
+                <div id="teams-list-column-2" class="teams-list-column"></div>
+                <div id="teams-list-column-3" class="teams-list-column"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            fetchData();
+            const socket = io();
+            let allTeamsData = [];
+
+            // Hàm trợ giúp để tách tên đội và tên trường
+            function parseTeamID(teamID) {
+                const parts = teamID.split('_');
+                const teamNumber = parts[0];
+                const teamName = parts.slice(1).join(' ');
+                return { teamNumber, teamName };
+            }
+
+            // Hàm để tạo và hiển thị các liên minh đã chọn
+            function renderAlliances(alliances, rankings) {
+                const alliancesContainer = document.getElementById('alliances-container');
+                alliancesContainer.innerHTML = '';
+
+                const rankingMap = new Map(rankings.map(team => [team.teamID, team.ranking]));
+                const numAlliances = 8;
+
+                for(let i = 0; i < numAlliances; i++) {
+                    const alliance = alliances[i] || { captain_teamID: null, partner_teamID: null };
+
+                    const allianceSlot = document.createElement('div');
+                    allianceSlot.className = 'alliance-slot';
+
+                    // Ô xếp hạng
+                    const rankDiv = document.createElement('div');
+                    rankDiv.className = 'rank';
+                    rankDiv.textContent = alliance.captain_teamID ? rankingMap.get(alliance.captain_teamID) || '?' : i + 1;
+
+                    // Ô đội trưởng
+                    const captainTeamDiv = document.createElement('div');
+                    captainTeamDiv.className = 'captain-team team-slot';
+                    if (alliance.captain_teamID) {
+                        const { teamNumber: captainNum, teamName: captainName } = parseTeamID(alliance.captain_teamID);
+
+                        const captainNumberSpan = document.createElement('span');
+                        captainNumberSpan.className = 'team-id-number';
+                        captainNumberSpan.textContent = captainNum;
+
+                        const captainNameSpan = document.createElement('span');
+                        captainNameSpan.className = 'team-id-name';
+                        captainNameSpan.textContent = captainName;
+
+                        captainTeamDiv.appendChild(captainNumberSpan);
+                        captainTeamDiv.appendChild(captainNameSpan);
+                    } else {
+                        captainTeamDiv.classList.add('placeholder');
+                        captainTeamDiv.innerHTML = '<span class="team-id-number">Đang chờ</span>';
+                    }
+
+                    // Ô đối tác
+                    const partnerTeamDiv = document.createElement('div');
+                    partnerTeamDiv.className = 'partner-team team-slot';
+
+                    if (alliance.partner_teamID) {
+                        const { teamNumber: partnerNum, teamName: partnerName } = parseTeamID(alliance.partner_teamID);
+
+                        const partnerNumberSpan = document.createElement('span');
+                        partnerNumberSpan.className = 'team-id-number';
+                        partnerNumberSpan.textContent = partnerNum;
+
+                        const partnerNameSpan = document.createElement('span');
+                        partnerNameSpan.className = 'team-id-name';
+                        partnerNameSpan.textContent = partnerName;
+
+                        partnerTeamDiv.appendChild(partnerNumberSpan);
+                        partnerTeamDiv.appendChild(partnerNameSpan);
+                    } else {
+                        partnerTeamDiv.classList.add('placeholder');
+                        partnerTeamDiv.innerHTML = '<span class="team-id-number">Đang chờ</span>';
+                    }
+
+                    alliancesContainer.appendChild(rankDiv);
+                    alliancesContainer.appendChild(captainTeamDiv);
+                    alliancesContainer.appendChild(partnerTeamDiv);
+                }
+            }
+
+            // Hàm để tạo và hiển thị danh sách các đội còn lại
+            function renderAvailableTeams(alliances, rankings) {
+                const column1 = document.getElementById('teams-list-column-1');
+                const column2 = document.getElementById('teams-list-column-2');
+                const column3 = document.getElementById('teams-list-column-3');
+
+                column1.innerHTML = '';
+                column2.innerHTML = '';
+                column3.innerHTML = '';
+
+                const selectedTeamIDs = new Set();
+                alliances.forEach(alliance => {
+                    selectedTeamIDs.add(alliance.captain_teamID);
+                    if (alliance.partner_teamID) {
+                        selectedTeamIDs.add(alliance.partner_teamID);
+                    }
+                });
+
+                const availableTeams = rankings.filter(team => !selectedTeamIDs.has(team.teamID));
+
+                const totalTeams = availableTeams.length;
+                const columnCount = 3;
+                const baseSize = Math.floor(totalTeams / columnCount);
+                let remainder = totalTeams % columnCount;
+
+                const columnSizes = [];
+                for (let i = 0; i < columnCount; i++) {
+                    columnSizes.push(baseSize + (remainder > 0 ? 1 : 0));
+                    if (remainder > 0) {
+                        remainder--;
+                    }
+                }
+
+                let teamIndex = 0;
+                for (let i = 0; i < columnCount; i++) {
+                    const currentColumn = document.getElementById(`teams-list-column-${i + 1}`);
+                    for (let j = 0; j < columnSizes[i]; j++) {
+                        const team = availableTeams[teamIndex];
+                        if (team) {
+                            const teamItem = document.createElement('div');
+                            teamItem.className = 'team-item';
+
+                            const teamRankSpan = document.createElement('span');
+                            teamRankSpan.className = 'team-rank';
+                            teamRankSpan.textContent = team.ranking;
+
+                            const teamIdDiv = document.createElement('div');
+                            teamIdDiv.className = 'team-id';
+
+                            const { teamNumber: num, teamName: name } = parseTeamID(team.teamID);
+
+                            const teamNumberSpan = document.createElement('span');
+                            teamNumberSpan.className = 'team-id-number';
+                            teamNumberSpan.textContent = num;
+
+                            const teamNameSpan = document.createElement('span');
+                            teamNameSpan.className = 'team-id-name';
+                            teamNameSpan.textContent = name;
+
+                            teamIdDiv.appendChild(teamNumberSpan);
+                            teamIdDiv.appendChild(teamNameSpan);
+
+                            teamItem.appendChild(teamRankSpan);
+                            teamItem.appendChild(teamIdDiv);
+                            currentColumn.appendChild(teamItem);
+                        }
+                        teamIndex++;
+                    }
+                }
+            }
+
+            // Hàm để fetch dữ liệu liên minh và xếp hạng ban đầu
+            async function fetchData() {
+                try {
+                    const [rankingsResponse, alliancesResponse] = await Promise.all([
+                        fetch('/get_all_rankings'),
+                        fetch('/get_alliance_selection')
+                    ]);
+
+                    if (!rankingsResponse.ok || !alliancesResponse.ok) {
+                        throw new Error("Network error while fetching data.");
+                    }
+
+                    const rankings = await rankingsResponse.json();
+                    const alliances = await alliancesResponse.json();
+
+                    renderAlliances(alliances, rankings);
+                    renderAvailableTeams(alliances, rankings);
+                } catch (error) {
+                    console.error('Error fetching data:', error);
+                }
+            }
+
+            // Lắng nghe sự kiện cập nhật liên minh từ WebSocket
+            socket.on('alliance_selection_updated', (data) => {
+                console.log('Received updated alliances:', data.alliances);
+                if (!Array.isArray(data.alliances)) {
+                    console.error("Dữ liệu alliances không phải array:", data);
+                    return;
+                }
+                fetch('/get_all_rankings')
+                    .then(response => response.json())
+                    .then(rankings => {
+                        renderAlliances(data.alliances, rankings);
+                        renderAvailableTeams(data.alliances, rankings);
+                    })
+                    .catch(error => console.error('Error fetching rankings for update:', error));
+            });
+
+            // Lắng nghe sự kiện cập nhật bảng xếp hạng
+            socket.on('update_ranking', (data) => {
+                console.log('Received updated rankings:', data.ranking);
+
+                fetch('/get_alliance_selection')
+                    .then(response => response.json())
+                    .then(alliances => {
+                        renderAlliances(alliances, data.ranking);
+                        renderAvailableTeams(alliances, data.ranking);
+                    })
+                    .catch(error => console.error('Error fetching alliances for update:', error));
+            });
+
+            // Gọi hàm để hiển thị dữ liệu ban đầu khi trang được tải
+            fetchData();
+        });
+    </script>
+</body>
+</html>
