@@ -3,14 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BẢNG XẾP HẠNG</title>
+    <title>BẢNG XẾP HẠNG PLAYOFF</title>
     <style>
-        /* General body and page styling */
+        /* Styling for the entire page body */
         body {
             font-family: Arial, sans-serif;
             margin: 0;
             background-color: #0d1117;
             background-image: url('{{ url_for('static', filename='playoff_ranking.jpg') }}');
+            background-size: cover;
+            background-position: center;
             color: white;
             font-weight: bold;
             text-transform: uppercase;
@@ -22,6 +24,7 @@
             box-sizing: border-box;
         }
 
+        /* Styling for the main page title */
         .page-title {
             font-size: 3.2em;
             color: #ffd700;
@@ -31,7 +34,7 @@
             letter-spacing: 2px;
         }
 
-        /* Container for the ranking table */
+        /* Container for the ranking table, with a semi-transparent background */
         .ranking-container {
             width: 95%;
             max-width: 1400px;
@@ -42,10 +45,10 @@
             position: relative;
         }
 
-        /* Header of the ranking table */
+        /* Header of the ranking table, fixed at the top */
         .ranking-header {
             display: grid;
-            grid-template-columns: 0.5fr 3fr 1fr 1fr 1fr 0.8fr 0.8fr;
+            grid-template-columns: 0.5fr 3fr 1fr 1fr 1fr; /* 5 columns for playoff ranking */
             position: sticky;
             top: 0;
             z-index: 10;
@@ -54,7 +57,7 @@
         /* Scrollable list of ranking data */
         .ranking-list {
             display: grid;
-            grid-template-columns: 0.5fr 3fr 1fr 1fr 1fr 0.8fr 0.8fr;
+            grid-template-columns: 0.5fr 3fr 1fr 1fr 1fr; /* 5 columns for the list items */
             grid-auto-rows: minmax(50px, auto);
             max-height: 60vh;
             overflow-y: auto;
@@ -76,7 +79,6 @@
 
         /* Specific styling for the header cells */
         .ranking-header-cell {
-            background-color: #0056b3;
             background-image: linear-gradient(to bottom, #d04a37, #de8e30);
             color: white;
             font-size: 1.3em;
@@ -89,18 +91,18 @@
             border-top-left-radius: 10px;
         }
 
-        .ranking-header-cell:nth-child(7) {
+        .ranking-header-cell:last-child {
             border-top-right-radius: 10px;
         }
 
-        /* Highlight the ranking number */
-        .ranking-container .grid-cell:nth-child(7n+1) {
+        /* Highlight the ranking number column */
+        .ranking-list .grid-cell:nth-child(5n+1) {
             font-size: 1.2em;
             color: #ffd700;
         }
 
         /* Align team names to the left */
-        .ranking-container .grid-cell:nth-child(7n+2) {
+        .ranking-list .grid-cell:nth-child(5n+2) {
             justify-content: flex-start;
             text-align: left;
             white-space: nowrap;
@@ -119,7 +121,7 @@
 
         @media (max-width: 768px) {
             .ranking-header, .ranking-list {
-                grid-template-columns: 0.5fr 1.5fr 1fr 1fr;
+                grid-template-columns: 0.5fr 1.5fr 1fr 1fr 1fr;
             }
             .page-title { font-size: 2em; margin-bottom: 20px; }
             .ranking-header-cell { font-size: 0.9em; padding: 10px 5px; }
@@ -130,7 +132,7 @@
 
         @media (max-width: 480px) {
             .ranking-header, .ranking-list {
-                grid-template-columns: 0.5fr 1.5fr 1fr;
+                grid-template-columns: 0.5fr 1.5fr 1fr 1fr 1fr;
             }
             .page-title { font-size: 1.5em; margin-bottom: 15px; }
             .ranking-header-cell { font-size: 0.8em; padding: 8px 3px; }
@@ -142,18 +144,16 @@
 </head>
 <body>
 
-    <h1 class="page-title" style="opacity: 0">BẢNG XẾP HẠNG</h1>
+    <h1 class="page-title" style="opacity: 1"> </h1>
 
     <div class="ranking-container">
         <!-- Header cố định, không cuộn -->
         <div class="ranking-header">
             <div class="grid-cell ranking-header-cell">HẠNG</div>
-            <div class="grid-cell ranking-header-cell" style="text-align: left;">ĐỘI THI</div>
-            <div class="grid-cell ranking-header-cell">TỔNG ĐIỂM TRẬN</div>
+            <div class="grid-cell ranking-header-cell" style="text-align: left;">LIÊN MINH</div>
+            <div class="grid-cell ranking-header-cell">TỔNG ĐIỂM</div>
             <div class="grid-cell ranking-header-cell">ĐIỂM CAO #1</div>
-            <div class="grid-cell ranking-header-cell hide-on-small">ĐIỂM CAO #2</div>
-            <div class="grid-cell ranking-header-cell hide-on-small hide-on-small-extra">TỔNG ĐIỂM THNS</div>
-            <div class="grid-cell ranking-header-cell hide-on-small hide-on-small-extra">SỐ TRẬN ĐÃ ĐẤU</div>
+            <div class="grid-cell ranking-header-cell">ĐIỂM CAO #2</div>
         </div>
         <!-- Danh sách có thể cuộn -->
         <div class="ranking-list" id="ranking-list">
@@ -161,23 +161,23 @@
         </div>
     </div>
 <script>
+    // Variables for auto-scrolling logic
     let scrollInterval;
     let isHovering = false;
     let isDelayed = false;
-    let allRankingData = []; // Store all the ranking data
 
+    // Function to load ranking data from the API endpoint
     async function loadRanking() {
         try {
-            // Replace with your actual API endpoint
-            const response = await fetch("/get_ranking_data");
+            // Fetch playoff ranking data from the new, separate endpoint
+            const response = await fetch("/get_playoff_ranking_data");
             const data = await response.json();
-            allRankingData = data; // Save all data
 
             const container = document.getElementById("ranking-list");
             container.innerHTML = ''; // Clear old data
 
-            // Load all data into the list to enable full scrolling
-            allRankingData.forEach((team, index) => {
+            // Dynamically create and append cells for each ranking entry
+            data.forEach((team) => {
                 const rankingCell = document.createElement("div");
                 rankingCell.className = "grid-cell";
                 rankingCell.textContent = team.ranking;
@@ -195,24 +195,14 @@
                 highest1Cell.textContent = team.highest1.toFixed(2);
 
                 const highest2Cell = document.createElement("div");
-                highest2Cell.className = "grid-cell hide-on-small";
+                highest2Cell.className = "grid-cell";
                 highest2Cell.textContent = team.highest2.toFixed(2);
-
-                const harvestCell = document.createElement("div");
-                harvestCell.className = "grid-cell hide-on-small hide-on-small-extra";
-                harvestCell.textContent = team.totalHarvestScore;
-
-                const matchCountCell = document.createElement("div");
-                matchCountCell.className = "grid-cell hide-on-small hide-on-small-extra";
-                matchCountCell.textContent = team.matchesPlayed;
 
                 container.appendChild(rankingCell);
                 container.appendChild(teamNameCell);
                 container.appendChild(totalScoreCell);
                 container.appendChild(highest1Cell);
                 container.appendChild(highest2Cell);
-                container.appendChild(harvestCell);
-                container.appendChild(matchCountCell);
             });
 
             startAutoScroll();
@@ -222,10 +212,11 @@
         }
     }
 
+    // Function to handle the auto-scrolling feature
     function startAutoScroll() {
         const rankingList = document.getElementById('ranking-list');
         const scrollAmount = 1.5;
-        const delayTime = 1500; // 5 seconds delay
+        const delayTime = 1500; // 1.5 seconds delay
 
         if (scrollInterval) clearInterval(scrollInterval);
 
@@ -254,9 +245,10 @@
         }, 50); // Scrolling speed (lower is faster)
     }
 
+    // Initial load and periodic refresh
     window.onload = loadRanking;
 
-    setInterval(loadRanking, 30000);
+    setInterval(loadRanking, 15000); // Reload data every 15 seconds
 </script>
 </body>
 </html>

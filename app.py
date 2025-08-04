@@ -534,72 +534,7 @@ def on_join(data):
     else:
         print(f"Client {request.sid} tried to join room without field_id.")
 
-# ====================================================================
-# NEW: Endpoint để tạo các trận playoff dựa trên danh sách mới
-# ====================================================================
-@socketio.on('generate_playoff_matches')
-def handle_generate_playoff_matches():
-    print("Received request to generate playoff matches.")
-    with app.app_context():
-        # Lấy tất cả các liên minh đã được lưu trữ trong cơ sở dữ liệu, sắp xếp theo số liên minh
-        alliances = Alliance.query.order_by(Alliance.alliance_number.asc()).all()
 
-        if len(alliances) != 8:
-            print(f"Error: Expected 8 alliances, but found {len(alliances)}. Cannot generate matches.")
-            emit('match_generation_status', {'success': False, 'message': 'Cần có 8 liên minh để tạo trận đấu.'})
-            return
-
-        # Ánh xạ các liên minh theo số liên minh để dễ dàng truy cập
-        alliance_map = {alliance.alliance_number: alliance for alliance in alliances}
-
-        # Định nghĩa 16 cặp đấu chính xác như danh sách bạn đã cung cấp
-        match_configs = [
-            (1, 2, 'Playoff Match 01'), # Blue Alliance 1 vs Red Alliance 2
-            (3, 4, 'Playoff Match 02'), # Blue Alliance 3 vs Red Alliance 4
-            (5, 6, 'Playoff Match 03'), # Blue Alliance 5 vs Red Alliance 6
-            (7, 8, 'Playoff Match 04'), # Blue Alliance 7 vs Red Alliance 8
-            (1, 5, 'Playoff Match 05'),
-            (2, 6, 'Playoff Match 06'),
-            (3, 7, 'Playoff Match 07'),
-            (4, 8, 'Playoff Match 08'),
-            (1, 3, 'Playoff Match 09'),
-            (2, 4, 'Playoff Match 10'),
-            (5, 7, 'Playoff Match 11'),
-            (6, 8, 'Playoff Match 12'),
-            (1, 8, 'Playoff Match 13'),
-            (2, 7, 'Playoff Match 14'),
-            (3, 6, 'Playoff Match 15'),
-            (4, 5, 'Playoff Match 16'),
-        ]
-
-        # Xóa các trận đấu playoff cũ nếu có trước khi tạo mới
-        Schedule.query.filter(Schedule.matchNumber.like('Playoff%')).delete()
-        db.session.commit()
-
-        # Tạo và lưu 16 trận đấu mới vào database
-        for alliance_blue_num, alliance_red_num, match_name in match_configs:
-            blue_alliance = alliance_map.get(alliance_blue_num)
-            red_alliance = alliance_map.get(alliance_red_num)
-
-            if blue_alliance and red_alliance:
-                new_match = Schedule(
-                    matchNumber=match_name,
-                    blueTeam1=blue_alliance.captain_teamID,
-                    blueTeam2=blue_alliance.partner_teamID,
-                    redTeam1=red_alliance.captain_teamID,
-                    redTeam2=red_alliance.partner_teamID,
-                    round=1, # Tất cả đều là vòng đầu tiên
-                    field=1  # Gán mặc định vào field 1
-                )
-                db.session.add(new_match)
-                print(f"Created match: {match_name} (Blue: Alliance {alliance_blue_num}, Red: Alliance {alliance_red_num})")
-            else:
-                print(f"Warning: Alliance not found for match {match_name}.")
-
-        db.session.commit()
-        print("16 playoff matches generated and saved successfully.")
-        emit('match_generation_status', {'success': True, 'message': 'Đã tạo 16 trận đấu playoff thành công!'})
-# ====================================================================
 
 @socketio.on('start_match')
 def handle_start_match(data):
